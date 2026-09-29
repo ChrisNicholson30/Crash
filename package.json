@@ -11,13 +11,17 @@
     "icons": "node scripts/make-icons.mjs",
     "cf:dev": "pnpm build && wrangler dev",
     "cf:deploy": "pnpm build && wrangler deploy",
-    "cf:check": "pnpm build && wrangler deploy --dry-run"
+    "cf:check": "pnpm build && wrangler deploy --dry-run",
+    "ai:tables": "node --experimental-transform-types --no-warnings scripts/build-ai-tables.ts"
   },
   "dependencies": {
+    "canvas-confetti": "^1.9.4",
+    "motion": "^13.4.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^26.6.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

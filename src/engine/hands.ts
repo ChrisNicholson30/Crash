@@ -1,29 +1,40 @@
-import type { Card } from './cards';
+import type { Card } from './cards.ts';
 
-/** Higher value beats lower. */
-export enum Category {
-  HighCard = 0,
-  Pair = 1,
-  Flush = 2,
-  Run = 3,
-  Stiff = 4,
-  Prile = 5,
-}
+/**
+ * Hand categories, higher beats lower. Only Prile, Stiff, Run and Flush are
+ * playable hands in Crash; three cards that make none of them cannot be played
+ * (the player declines that hand instead).
+ */
+export const Category = {
+  None: 0,
+  Flush: 1,
+  Run: 2,
+  Stiff: 3,
+  Prile: 4,
+} as const;
+export type Category = (typeof Category)[keyof typeof Category];
 
 export const CATEGORY_NAME: Record<Category, string> = {
-  [Category.HighCard]: 'High card',
-  [Category.Pair]: 'Pair',
+  [Category.None]: 'Not a hand',
   [Category.Flush]: 'Flush',
   [Category.Run]: 'Run',
   [Category.Stiff]: 'Stiff',
   [Category.Prile]: 'Prile',
 };
 
+export const CATEGORY_BLURB: Record<Category, string> = {
+  [Category.None]: 'Needs a Prile, Stiff, Run or Flush',
+  [Category.Flush]: 'Three of the same suit',
+  [Category.Run]: 'Three in a row, any suits',
+  [Category.Stiff]: 'Three in a row, same suit',
+  [Category.Prile]: 'Three of the same rank',
+};
+
 export interface HandEval {
   category: Category;
   /** Tie-break ranks, most significant first. */
   ranks: number[];
-  /** Single comparable number: category, then tie-break ranks. */
+  /** Single comparable number: category, then tie-break ranks. Higher wins. */
   value: number;
 }
 
@@ -52,31 +63,33 @@ export function evaluate(cards: readonly Card[]): HandEval {
   } else if (flush) {
     category = Category.Flush;
     ranks = r;
-  } else if (r[0] === r[1]) {
-    category = Category.Pair;
-    ranks = [r[0], r[2]];
-  } else if (r[1] === r[2]) {
-    category = Category.Pair;
-    ranks = [r[1], r[0]];
   } else {
-    category = Category.HighCard;
+    category = Category.None;
     ranks = r;
   }
 
-  let value = category;
+  let value: number = category;
   for (let i = 0; i < 3; i++) value = value * 15 + (ranks[i] ?? 0);
   return { category, ranks, value };
 }
 
-/** Positive if a beats b, negative if b beats a, 0 for an exact tie. */
-export function compareHands(a: readonly Card[], b: readonly Card[]): number {
-  return Math.sign(evaluate(a).value - evaluate(b).value);
+export function isPlayable(cards: readonly Card[]): boolean {
+  return evaluate(cards).category !== Category.None;
 }
 
-/** Cards ordered for display: flush shows highest first, as the rules describe. */
+/** Positive if a beats b, negative if b beats a, 0 for an exact tie. `null` is a declined hand. */
+export function compareHands(a: readonly Card[] | null, b: readonly Card[] | null): number {
+  return Math.sign(handValue(a) - handValue(b));
+}
+
+/** Declined hands score -1: they lose to every real hand and tie with each other. */
+export function handValue(cards: readonly Card[] | null): number {
+  return cards ? evaluate(cards).value : -1;
+}
+
+/** Cards ordered for display: highest first; an A-2-3 run shows the ace last (3 2 A). */
 export function displayOrder(cards: readonly Card[]): Card[] {
   const sorted = cards.slice().sort((a, b) => b.rank - a.rank);
-  // A-2-3 plays the ace low, so show it last: 3 2 A.
   const { category, ranks } = evaluate(sorted);
   if ((category === Category.Run || category === Category.Stiff) && ranks[0] === 3) sorted.push(sorted.shift()!);
   return sorted;

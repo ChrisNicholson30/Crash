@@ -6,17 +6,18 @@ The three-card hand game for 3 or 4 players, as an installable offline web app (
 
 | | 4 players | 3 players |
 |---|---|---|
-| Cards each | 13 | 17 (1 card left undealt) |
-| Hands of 3 | 4 (1 spare) | 5 (2 spare) |
-| Points to win | 10 | 21 |
+| Cards each | 13 | 17 (1 card undealt) |
+| Hands of 3 | 4 | 5 |
 
-**Hands, best first:** Prile (three of a kind) · Stiff (three in a row, same suit) · Run (three in a row, any suit) · Flush (same suit) · Pair · High card.
-
-- Same type: highest card wins, then the next. Aces are high (Q-K-A) or low (A-2-3); runs don't wrap (K-A-2).
-- Arrange your hands in any order, in secret. All players reveal together.
-- Each hand position is compared against **every** opponent's hand in the same position. Each win scores 1 point; an exact tie scores nothing.
-- Spare cards are thrown away.
-- First to the target wins. If several players cross it in one deal, the highest total wins; if they're level, play another deal.
+- **Hands, best first:** Prile (three of a kind) · Stiff (three in a row, same suit) · Run (three in a row) · Flush (same suit). Nothing else counts. Ties go to the highest card, then the next. Aces are high (Q-K-A) or low (A-2-3, the lowest run), and runs don't wrap.
+- **Order:** hands line up strongest first, weakest last. A hand you can't make can be **declined**; a declined hand loses to any real hand.
+- **Play:** hands are played one at a time. Each hand is compared with every opponent's hand in the same position, and each win scores 1 point.
+- **Betting:** everyone starts with 1,000 Barney tokens. Before each hand, players bet in turn into the pot, and the best hand among those who bet takes it. You can bet on credit down to −5,000; reach that and you're out.
+- **Crash:** before hand 1, any player can call Crash, predicting they'll win every hand.
+  - Pull it off and each opponent pays double their bets for the deal.
+  - Miss and the caller pays each opponent double their own bets.
+  - Crash callers must bet at least 50 on every hand.
+- **Match:** first to 10 points wins a leg, 3 legs win a set, and 3 sets win the game. Being the last player standing also wins.
 
 ## Develop
 
@@ -32,7 +33,7 @@ pnpm icons                   # regenerate PNG icons from public/icon.svg
 
 ## Layout
 
-- `src/engine/`: pure TypeScript rules (no UI). This covers cards and dealing, hand evaluation, scoring and game state, plus the computer player (`ai.ts`).
+- `src/engine/`: pure TypeScript rules (no UI). `match.ts` covers legs, sets, betting, Crash and debt. `partition.ts` and `ai.ts` are the computer player. `ai-tables.json` is regenerated with `pnpm ai:tables`.
 - `src/ui/`: React screens: setup, arranging hands, reveal, scoreboard.
 
 ## Deploy
