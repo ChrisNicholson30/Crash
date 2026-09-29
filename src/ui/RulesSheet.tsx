@@ -69,9 +69,10 @@ export function RulesSheet({ onClose }: { onClose: () => void }) {
 
         <h3>4 · Call the Crash</h3>
         <p>
-          Before hand 1, anyone can call <b>Crash</b>: a promise to win every hand against everyone. Pull it off and each opponent
-          pays you double their bets for the deal. Miss once and you pay each of them double yours. Crash callers must bet at
-          least {RULES.crashMinBet} on every hand.
+          Call <b>Crash</b> when you lock in, or before any later hand turns over while you haven’t lost a hand yet: a promise to
+          win every hand of the deal against everyone. Everyone is told the moment it’s called. Pull it off and each opponent pays
+          you double their bets for the deal. Miss once and you pay each of them double yours — and you sit out the rest of the
+          leg. Crash callers must bet at least {RULES.crashMinBet} on every hand.
         </p>
 
         <h3>5 · Legs, sets, game</h3>

@@ -3,7 +3,8 @@ import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 import { cardId, sameCard, sortByRank, sortBySuit, type Card } from '../engine/cards.ts';
 import { CATEGORY_NAME, Category, displayOrder, evaluate } from '../engine/hands.ts';
 import { aiArrange } from '../engine/ai.ts';
-import { HUMAN, type Arrangement, type Match } from '../engine/match.ts';
+import type { Arrangement, Match } from '../engine/match.ts';
+import { useCountdown } from './Game.tsx';
 import { CardSlot, PlayingCard } from './PlayingCard.tsx';
 
 interface Slot {
@@ -14,7 +15,9 @@ interface Slot {
 
 interface Props {
   m: Match;
+  me: number;
   onLock: (arr: Arrangement, crash: boolean) => void;
+  deadline?: number | null;
 }
 
 const ORDINAL = ['1st', '2nd', '3rd', '4th', '5th'];
@@ -37,8 +40,49 @@ function ordered(slots: Slot[]): Slot[] {
   });
 }
 
-export function ArrangeView({ m, onLock }: Props) {
-  const dealt = m.deal.dealt[HUMAN];
+export function ArrangeView(props: Props) {
+  const { m, me } = props;
+  if (m.deal.submitted[me]) return <LockedIn m={m} me={me} deadline={props.deadline} />;
+  return <Builder {...props} />;
+}
+
+/** Shown online after locking in, while others are still building. */
+function LockedIn({ m, me, deadline }: { m: Match; me: number; deadline?: number | null }) {
+  const secs = useCountdown(deadline);
+  const hands = m.deal.arrangements[me]?.hands ?? [];
+  const waiting = m.deal.active.filter((s) => m.players[s].isHuman && !m.deal.submitted[s]).map((s) => m.players[s].name);
+  return (
+    <section className="arrange">
+      <header className="stage-head">
+        <div>
+          <h2>Locked in</h2>
+          <p>
+            Waiting for {waiting.join(', ') || 'the table'}
+            {secs !== null ? ` · ${secs}s` : ''}
+          </p>
+        </div>
+      </header>
+      <div className="slots">
+        {hands.map((h, i) => (
+          <div key={i} className={`slot done${h ? '' : ' declined'}`}>
+            <div className="slot-head">
+              <span className="slot-pos">{ORDINAL[i]}</span>
+              <span className="slot-cat">{h ? CATEGORY_NAME[evaluate(h).category] : 'Declined'}</span>
+            </div>
+            <div className="slot-cards">
+              {h ? displayOrder(h).map((c) => <PlayingCard key={cardId(c)} card={c} size="sm" />) : <span className="declined-note">No hand</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+      {m.deal.crash[me] && <p className="crash-hint static">You’ve called Crash. The table finds out when hand 1 starts.</p>}
+    </section>
+  );
+}
+
+function Builder({ m, me, onLock, deadline }: Props) {
+  const secs = useCountdown(deadline);
+  const dealt = m.deal.dealt[me];
   const handCount = m.deal.handCount;
   const fresh = () => Array.from({ length: handCount }, (_, id) => ({ id, cards: [], declined: false }));
   const [slots, setSlots] = useState<Slot[]>(fresh);
@@ -97,7 +141,10 @@ export function ArrangeView({ m, onLock }: Props) {
       <header className="stage-head">
         <div>
           <h2>Build your hands</h2>
-          <p>They line up strongest first automatically. Only a Prile, Stiff, Run or Flush counts.</p>
+          <p>
+            They line up strongest first automatically. Only a Prile, Stiff, Run or Flush counts.
+            {secs !== null ? ` · ${secs}s left` : ''}
+          </p>
         </div>
       </header>
 

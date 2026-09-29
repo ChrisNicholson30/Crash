@@ -2,7 +2,7 @@ import type { Card, Rng } from './cards.ts';
 import { handValue } from './hands.ts';
 import { bestPartition, percentile } from './partition.ts';
 import type { Arrangement, Match } from './match.ts';
-import TABLES from './ai-tables.json';
+import TABLES from './ai-tables.json' with { type: 'json' };
 
 const tables = TABLES as unknown as Record<string, number[][]>;
 
@@ -26,12 +26,15 @@ export function aiArrange(cards: readonly Card[], handCount: number): Arrangemen
   return { hands, spares: cards.filter((c) => !used.has(c)) };
 }
 
-/** Calls Crash only when the whole set of hands looks very likely to beat everyone. */
-export function aiCallsCrash(arr: Arrangement, activeCount: number, rng: Rng): boolean {
+/**
+ * Calls Crash only when the hands still to play (from `from` on) look very
+ * likely to beat everyone.
+ */
+export function aiCallsCrash(arr: Arrangement, activeCount: number, rng: Rng, from = 0): boolean {
   if (arr.hands.some((h) => h === null)) return false;
   const opponents = activeCount - 1;
   const all = arr.hands.reduce(
-    (p, h, pos) => p * beatAllChance(arr.hands.length, pos, handValue(h), opponents),
+    (p, h, pos) => (pos < from ? p : p * beatAllChance(arr.hands.length, pos, handValue(h), opponents)),
     1,
   );
   return all > 0.5 || (all > 0.22 && rng() < 0.35);

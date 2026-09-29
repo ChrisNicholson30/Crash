@@ -25,19 +25,12 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts',
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
+        // The API and live tables must always hit the network.
+        navigateFallbackDenylist: [/^\/api\//],
       },
     }),
   ],
-  test: { environment: 'node' },
+  // `pnpm dev` talks to the local Worker (`pnpm cf:dev`) for the online API.
+  server: { proxy: { '/api': { target: 'http://localhost:8787', ws: true } } },
+  test: { environment: 'node', include: ['src/**/*.test.ts'] },
 });

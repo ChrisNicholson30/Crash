@@ -2,8 +2,12 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import type { Card } from '../engine/cards.ts';
 import { PlayingCard } from './PlayingCard.tsx';
+import { Coin } from './Token.tsx';
 
 interface Props {
+  user: { username: string } | null;
+  unread: number;
+  onOnline: () => void;
   canResume: boolean;
   onResume: () => void;
   onStart: (players: 3 | 4, name: string) => void;
@@ -18,7 +22,7 @@ const FAN: Card[] = [
   { rank: 10, suit: 'H' },
 ];
 
-export function Home({ canResume, onResume, onStart, onRules }: Props) {
+export function Home({ user, unread, onOnline, canResume, onResume, onStart, onRules }: Props) {
   const [players, setPlayers] = useState<3 | 4>(4);
   const [name, setName] = useState(() => {
     try {
@@ -41,6 +45,18 @@ export function Home({ canResume, onResume, onStart, onRules }: Props) {
   return (
     <main className="home">
       <div className="fan" aria-hidden="true">
+        {[0, 1, 2].map((i) => (
+          <motion.span
+            key={`coin${i}`}
+            className="orbit-coin"
+            style={{ left: ['6%', '86%', '74%'][i], top: ['58%', '18%', '78%'][i] }}
+            initial={{ opacity: 0, scale: 0 }}
+            animate={{ opacity: 1, scale: 1, y: [0, -14, 0], rotateY: [0, 360] }}
+            transition={{ opacity: { delay: 0.8 + i * 0.15 }, scale: { delay: 0.8 + i * 0.15, type: 'spring' }, y: { duration: 2.6 + i * 0.4, repeat: Infinity, ease: 'easeInOut' }, rotateY: { duration: 3 + i, repeat: Infinity, ease: 'linear' } }}
+          >
+            <Coin size={[34, 26, 22][i]} />
+          </motion.span>
+        ))}
         {FAN.map((c, i) => (
           <motion.div
             key={i}
@@ -95,7 +111,12 @@ export function Home({ canResume, onResume, onStart, onRules }: Props) {
           </li>
         </ul>
         <button type="button" className="btn gold big" onClick={start}>
-          Deal me in
+          Play the computer
+        </button>
+        <button type="button" className="btn online big" onClick={onOnline}>
+          <span>Play friends online</span>
+          {user ? <small>as {user.username}</small> : <small>log in or sign up</small>}
+          {unread > 0 && <span className="unread">{unread}</span>}
         </button>
         {canResume && (
           <button type="button" className="btn ghost" onClick={onResume}>

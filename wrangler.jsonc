@@ -2,13 +2,30 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   // Must match the Worker name in the Cloudflare dashboard if you use Workers Builds.
   "name": "crash",
+  "main": "./worker/index.ts",
   "compatibility_date": "2026-09-29",
-  // Assets-only Worker: no server code. Cloudflare serves the Vite build output directly.
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     // Unknown paths return index.html (200) so deep links and PWA launches always load the app.
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    // Only the API runs Worker code; every other request is a static file.
+    "run_worker_first": ["/api/*"]
   },
+  // Accounts, friends, invites, messages. Schema: migrations/.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "crash-db",
+      "database_id": "dd8df0ae-f8e1-4132-9a1b-b7b6a5a3e8a9",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // One Durable Object per live table.
+  "durable_objects": {
+    "bindings": [{ "name": "TABLES", "class_name": "GameRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }],
   "observability": {
     "enabled": true
   }

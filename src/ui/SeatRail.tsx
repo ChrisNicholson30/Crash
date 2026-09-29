@@ -14,7 +14,7 @@ function Pips({ n, of, label }: { n: number; of: number; label: string }) {
   );
 }
 
-export function SeatRail({ m, highlight }: { m: Match; highlight?: number[] }) {
+export function SeatRail({ m, me, highlight }: { m: Match; me: number; highlight?: number[] }) {
   return (
     <ol className="rail">
       {m.players.map((p, s) => {
@@ -26,12 +26,13 @@ export function SeatRail({ m, highlight }: { m: Match; highlight?: number[] }) {
           <motion.li
             key={s}
             layout
-            className={`seat${p.isHuman ? ' me' : ''}${p.out ? ' out' : ''}${highlight?.includes(s) ? ' hot' : ''}`}
+            className={`seat${s === me ? ' me' : ''}${p.out ? ' out' : ''}${p.sittingOut && !p.out ? ' sitting' : ''}${highlight?.includes(s) ? ' hot' : ''}`}
             style={{ ['--seat' as string]: SEAT_COLORS[s] }}
           >
             <span className="seat-top">
               <span className="avatar">{p.name.slice(0, 1).toUpperCase()}</span>
-              <span className="seat-name">{p.name}</span>
+              <span className="seat-name">{s === me ? 'You' : p.name}</span>
+              {p.isHuman && s !== me && <span className="human-dot" title="Person" />}
               {m.deal.dealer === s && <span className="badge dealer" title="Dealer">D</span>}
               {m.deal.crash[s] && m.phase !== 'arrange' && <span className="badge crash">CRASH</span>}
             </span>
@@ -50,6 +51,7 @@ export function SeatRail({ m, highlight }: { m: Match; highlight?: number[] }) {
             </span>
             <Tokens value={p.tokens} size={12} />
             {p.out && <span className="out-tag">OUT</span>}
+            {p.sittingOut && !p.out && <span className="out-tag sit">SITS OUT</span>}
           </motion.li>
         );
       })}

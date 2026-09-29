@@ -1,120 +1,93 @@
 # Crash: Cloudflare Workers Setup
 
-How Crash is hosted on Cloudflare Workers, and the steps to get it live. Crash is a static app, so the Worker only serves the built files (Cloudflare calls this an *assets-only Worker*). There's no server code, no database and no secrets.
+How Crash runs on Cloudflare, and how to get it live. The app itself is static files, and one Worker adds the online side. That covers accounts, friends, invites, messages and live tables.
 
-## 1. What's in the repo
+## 1. What runs where
 
-| File | Purpose |
-|---|---|
-| `wrangler.jsonc` | Worker config: name `crash`, serves `./dist`, sends unknown paths to `index.html` |
-| `public/_headers` | Response headers: security headers, 1-year caching for hashed files, no caching for the service worker |
-| `package.json` → `cf:*` scripts | Build, run locally and deploy |
-| `.gitignore` | Ignores `.wrangler/` and `.dev.vars*` |
-
-### Key config decisions
-
-- **Assets only.** `wrangler.jsonc` has no `main` entry, so Cloudflare serves files straight from `dist/`. Static asset requests are free and don't count towards Worker request limits.
-- **`not_found_handling: "single-page-application"`.** Any unknown path returns the app with status 200, so a PWA launched from the home screen never gets a 404.
-- **Service worker files are never cached.** `sw.js`, `registerSW.js`, `index.html` and `manifest.webmanifest` are all served with `Cache-Control: no-cache`. Without this, players could be stuck on an old version.
-- **Hashed build files** (`/assets/*`) are cached for a year, because their names change on every build.
-- **No Cloudflare Vite plugin.** Plain Wrangler serving `dist/` keeps the build separate from the PWA plugin. Add the Vite plugin only if Crash later needs server code, such as an online multiplayer API.
-
-## 2. One-time setup
-
-### Step 1: Cloudflare account
-
-1. Sign in at dash.cloudflare.com with the CN-DESIGN LTD account.
-2. Go to **Workers & Pages**. If you've never used Workers, pick a `*.workers.dev` subdomain when prompted.
-
-### Step 2: Choose how it deploys
-
-Option **A** is recommended.
-
-| | A. Workers Builds (Git) | B. Deploy from your machine |
+| Piece | Cloudflare product | Where in the repo |
 |---|---|---|
-| How | Cloudflare builds and deploys on every push | You run `pnpm cf:deploy` |
-| Secrets in GitHub | None | None |
-| Previews | Automatic preview for each branch | Manual |
-| Best for | Normal use | A first deploy or a quick fix |
+| The app (PWA) | Workers static assets | `dist/` (built by Vite), headers in `public/_headers` |
+| API: `/api/*` | Worker | `worker/index.ts` |
+| Passwords and sessions | Worker (Web Crypto) | `worker/auth.ts` |
+| Accounts, friends, invites, messages, table history | **D1** (SQL database) `crash-db` | `migrations/0001_init.sql` |
+| Live tables (one per pairing code) | **Durable Object** `GameRoom`, WebSockets | `worker/room.ts` |
+| Rules engine (shared by app and server) | — | `src/engine/` |
 
-### Step 3A: Workers Builds (recommended)
+Only `/api/*` runs Worker code (`run_worker_first`). Every other request is a free static-asset hit.
 
-1. **Workers & Pages** → **Create** → **Import a repository**.
-2. Connect GitHub and choose `ChrisNicholson30/Crash-`.
-3. Enter these build settings:
+### Security notes
+
+- **Passwords** are hashed with PBKDF2-SHA256: 100,000 iterations (the Workers maximum) and a unique salt per user. Logins take the same time whether or not the username exists, so response times don't reveal valid usernames.
+- **Sessions** use a random 256-bit token in an `HttpOnly; Secure; SameSite=Lax` cookie. The database stores only its SHA-256 hash, and sessions expire after 30 days.
+- **Cross-site requests:** writes must be JSON, and requests from another site (checked via the `Origin` header) are refused.
+- **The server holds the real game.** Each player receives only their own cards, and other players' hands are blanked until they're turned over. So nobody can cheat by inspecting network traffic.
+- **Timeouts:** if a player goes quiet, the server acts for them after a timeout, so one person can't stall the table.
+
+## 2. Current status
+
+| Item | State |
+|---|---|
+| D1 database `crash-db` | **Created** in your account (Western Europe), id `dd8df0ae-f8e1-4132-9a1b-b7b6a5a3e8a9` |
+| Schema | **Applied** to the live database |
+| `wrangler.jsonc` | Points at that database; declares the `GameRoom` Durable Object |
+| Worker deployed | **Not yet.** See step 3 |
+
+## 3. Deploy
+
+The Durable Object and the Worker are created on the first deploy. Choose one of these:
+
+### A. Workers Builds (recommended): deploys on every push
+
+1. Cloudflare dashboard: **Workers & Pages** → **Create** → **Import a repository** → `ChrisNicholson30/Crash-`.
+2. Build settings:
 
 | Setting | Value |
 |---|---|
-| Project / Worker name | `crash` (**must match `name` in `wrangler.jsonc`**, or the build fails) |
+| Worker name | `crash` (must match `wrangler.jsonc`) |
 | Production branch | `main` |
 | Build command | `pnpm install --frozen-lockfile && pnpm build` |
-| Deploy command | `npx wrangler deploy` |
-| Preview command | `npx wrangler preview` (default) |
-| Root directory | `/` |
+| Deploy command | `npx wrangler d1 migrations apply crash-db --remote && npx wrangler deploy` |
+| Environment variable | `NODE_VERSION` = `22` |
 
-4. **Environment variables:** add `NODE_VERSION` = `22`. No other variables or secrets are needed.
-5. Save. The first build runs straight away and the site goes live at `https://crash.<your-subdomain>.workers.dev`.
-6. Optional: **Settings → Builds → Branch control**. Turn on preview builds so each branch gets its own preview URL.
+3. Save and deploy. The site goes live at `https://crash.<your-subdomain>.workers.dev`.
 
-### Step 3B: Deploy from your machine
+### B. From your own machine
 
 ```sh
 pnpm install
-npx wrangler login      # opens a browser once to authorise
-pnpm cf:deploy          # build, then wrangler deploy
+npx wrangler login              # once; opens a browser
+pnpm db:migrate:remote          # safe to re-run; the schema uses IF NOT EXISTS
+pnpm build && npx wrangler deploy
 ```
 
-### Step 4: Custom domain (optional)
+### Custom domain (optional)
 
-1. The domain must be a zone in the same Cloudflare account.
-2. Worker `crash` → **Settings → Domains & Routes → Add → Custom domain**, e.g. `crash.cn-design.co.uk`.
-3. Cloudflare creates the DNS record and the SSL certificate itself. Allow a few minutes.
+Worker `crash` → **Settings → Domains & Routes → Add → Custom domain**, for example `crash.cn-design.co.uk`. Invite links automatically use whichever domain people open.
 
-Alternatively, add this to `wrangler.jsonc` and it will be applied on the next deploy:
-
-```jsonc
-"routes": [{ "pattern": "crash.cn-design.co.uk", "custom_domain": true }]
-```
-
-## 3. Everyday commands
+## 4. Local development
 
 | Command | What it does |
 |---|---|
-| `pnpm dev` | Vite dev server with fast refresh. Use this for UI work (the service worker is off) |
-| `pnpm cf:dev` | Build, then serve through the real Workers runtime at `localhost:8787`, with headers and routing as in production |
-| `pnpm cf:check` | Build and do a deploy dry run. Validates the config without uploading anything |
-| `pnpm cf:deploy` | Build and deploy to production |
-| `node scripts/e2e-smoke.mjs http://localhost:8787/` | Browser smoke test against `cf:dev` |
+| `pnpm cf:dev` | Builds, applies migrations to the **local** database, and runs everything (app, API, live tables) at `localhost:8787` |
+| `pnpm dev` | Vite with hot reload; it forwards `/api` to `localhost:8787`, so run `pnpm cf:dev` alongside it |
+| `pnpm test` | Rules engine tests: 34, covering Crash, sitting out, multiplayer and privacy |
+| `node --experimental-transform-types scripts/online-smoke.ts` | API and live-table test against `localhost:8787` |
+| `node scripts/e2e-online.mjs` | Two browsers sign up, pair by code, chat and play three deals |
+| `node scripts/e2e-smoke.mjs http://localhost:8787/` | Solo game at phone size, plus offline reload |
 
-## 4. Verified locally (2026-09-29, Wrangler 4.143.0)
+Local data lives in `.wrangler/` (git-ignored). Nothing local touches the live database.
 
-| Check | Result |
-|---|---|
-| `wrangler deploy --dry-run` | 13 files read from `dist`, no bindings |
-| `GET /` | 200, security headers present |
-| `GET /some/deep/link` | 200, returns the app |
-| `GET /sw.js`, `/manifest.webmanifest` | `Cache-Control: no-cache`; manifest has the correct content type |
-| `GET /assets/*.js` | `max-age=31536000, immutable` |
-| `GET /_headers` | Not served itself |
-| Browser smoke test on `wrangler dev` | Full 3-player game played, fits the screen, loads offline, no errors |
+## 5. Pairing and invites
 
-## 5. After the first real deploy
-
-1. Open the `workers.dev` URL on a phone → **Add to Home Screen**. It should launch full screen with the Crash icon.
-2. Turn on airplane mode and relaunch. The game should still load.
-3. Run a Lighthouse PWA/performance check, or use the website-performance-audit skill on the live URL.
-4. Worker → **Observability**. Logs are switched on in `wrangler.jsonc`; confirm requests are showing up.
+- **Table code:** the host taps *New table* and gets a 6-character code, e.g. `VTLHCH`. It uses 32 characters with no 0/O or 1/I, and uniqueness is checked. Friends enter it under **Join**.
+- **Invite link:** *Share invite link* opens the phone's share sheet. Opening the link signs the person up or in, makes them friends with the host, and puts them straight at the table.
+- **Friend invites:** from the lobby, *Invite* sends a friend a message with a **Join table** button.
+- Empty seats are filled by computer players when the host deals.
 
 ## 6. Rollback
 
 - **Dashboard:** Worker → **Deployments** → choose an earlier version → **Rollback**.
 - **CLI:** `npx wrangler rollback`.
-- Rollbacks take effect straight away. The service worker picks up the rolled-back files on the next launch, because the service worker files aren't cached.
+- Database changes are additive (`CREATE … IF NOT EXISTS`), so rolling the code back doesn't need a schema rollback.
 
-## 7. If Crash gets a server later (online multiplayer)
-
-1. Add `"main": "./worker/index.ts"` and `"run_worker_first": ["/api/*"]` under `assets`.
-2. Headers set in `_headers` don't apply to responses from Worker code, so set them in the Worker for `/api/*`.
-3. Add bindings (Durable Objects for game rooms, D1 or Supabase for accounts) and secrets using `wrangler secret put`. Keep local values in `.dev.vars`, which is already git-ignored.
-
-#crash #cloudflare #workers #deploy #cn-design
+#crash #cloudflare #workers #d1 #durable-objects #cn-design

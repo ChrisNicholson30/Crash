@@ -18,7 +18,7 @@ await page.goto(url);
 await wait(1200);
 await snap('1-home');
 await page.getByRole('button', { name: /4 players/ }).click();
-await page.getByRole('button', { name: 'Deal me in' }).click();
+await page.getByRole('button', { name: 'Play the computer' }).click();
 await wait(1200);
 await snap('2-deal');
 
@@ -45,10 +45,9 @@ for (; deals < 3; deals++) {
   if (deals === 0) await snap('4-betting');
   for (let h = 0; h < 5; h++) {
     const bet = page.getByRole('button', { name: /^Bet \d/ });
-    const cont = page.getByRole('button', { name: 'Continue' });
-    if (await cont.isVisible().catch(() => false)) await cont.click();
-    else {
-      await page.getByRole('button', { name: '50', exact: true }).click();
+    if (await bet.isVisible().catch(() => false)) {
+      await page.getByRole('button', { name: 'Add 50' }).click();
+      if (deals === 0 && h === 0) await snap('4b-bet-dock');
       await bet.click();
     }
     await wait(1900);
@@ -62,8 +61,16 @@ for (; deals < 3; deals++) {
   await wait(900);
   const takeover = page.locator('.takeover');
   if (await takeover.isVisible().catch(() => false)) {
+    await wait(900);
     await snap(`6-crash-${deals}`);
     await takeover.click();
+    await wait(600);
+  }
+  const party = page.locator('.celebrate-screen');
+  if (await party.isVisible().catch(() => false)) {
+    await wait(900);
+    await snap(`6-party-${deals}`);
+    await party.click({ timeout: 2000 }).catch(() => {}); // it also closes itself
     await wait(600);
   }
   await snap(`7-summary-${deals}`);
@@ -78,6 +85,7 @@ await ctx.setOffline(true);
 await page.reload();
 await wait(800);
 const offlineOk = await page.locator('.wordmark').isVisible();
+await snap('8-home-offline');
 const resume = await page.getByRole('button', { name: 'Resume game' }).isVisible();
 console.log(JSON.stringify({ deals, crashSeen, horizontalOverflow: overflow, offlineOk, resume, errors }, null, 2));
 await browser.close();

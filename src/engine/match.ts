@@ -33,8 +33,12 @@ export interface Arrangement {
 export interface Player {
   name: string;
   isHuman: boolean;
+  /** Account id for online players. */
+  id?: string;
   tokens: number;
   out: boolean;
+  /** Missed a Crash: sits out the rest of the current leg. */
+  sittingOut: boolean;
 }
 
 export interface PositionResult {
@@ -70,7 +74,11 @@ export interface DealState {
   /** Cards per seat ([] for seats not playing). */
   dealt: Card[][];
   arrangements: (Arrangement | null)[];
+  /** Human seats that have locked in their hands this deal. */
+  submitted: boolean[];
   crash: boolean[];
+  /** Hand number (0-based) at which each seat called Crash, or null. */
+  crashFrom: (number | null)[];
   /** The hand currently being bet on / revealed. */
   position: number;
   /** Seats in betting order for this deal (starts left of the dealer). */
@@ -117,15 +125,23 @@ const AI_NAMES = ['Ava', 'Ben', 'Cal'];
 // ---------- set-up ----------
 
 export function newMatch(playerCount: 3 | 4, humanName = 'You', rng: Rng = Math.random): Match {
-  const players: Player[] = [
-    { name: humanName, isHuman: true, tokens: RULES.startTokens, out: false },
-    ...AI_NAMES.slice(0, playerCount - 1).map((name) => ({
-      name,
-      isHuman: false,
-      tokens: RULES.startTokens,
-      out: false,
-    })),
-  ];
+  return newMatchWith(
+    [{ name: humanName, isHuman: true }, ...AI_NAMES.slice(0, playerCount - 1).map((name) => ({ name, isHuman: false }))],
+    rng,
+  );
+}
+
+/** Computer players' names, skipping any already taken at the table. */
+export function botNames(taken: string[], count: number): string[] {
+  const pool = [...AI_NAMES, 'Dot', 'Eli', 'Fay'].filter((n) => !taken.some((t) => t.toLowerCase() === n.toLowerCase()));
+  return pool.slice(0, count);
+}
+
+/** A match for any mix of people and computer players (3 or 4 seats). Tokens start fresh every game. */
+export function newMatchWith(seats: { name: string; isHuman: boolean; id?: string }[], rng: Rng = Math.random): Match {
+  if (seats.length < 3 || seats.length > 4) throw new Error('Crash needs 3 or 4 players');
+  const playerCount = seats.length;
+  const players: Player[] = seats.map((p) => ({ ...p, tokens: RULES.startTokens, out: false, sittingOut: false }));
   const zeros = () => new Array<number>(playerCount).fill(0);
   const dealer = Math.floor(rng() * playerCount);
   const shell: Match = {
@@ -146,7 +162,7 @@ export function newMatch(playerCount: 3 | 4, humanName = 'You', rng: Rng = Math.
 
 function dealCards(m: Match, dealer: number, number: number, rng: Rng): DealState {
   const n = m.players.length;
-  const active = m.players.flatMap((p, i) => (p.out ? [] : [i]));
+  const active = m.players.flatMap((p, i) => (p.out || p.sittingOut ? [] : [i]));
   const { cards, hands } = tableLayout(active.length);
   const deck = shuffle(makeDeck(), rng);
   const dealt: Card[][] = Array.from({ length: n }, () => []);
@@ -156,7 +172,7 @@ function dealCards(m: Match, dealer: number, number: number, rng: Rng): DealStat
   const betOrder: number[] = [];
   for (let k = 1; k <= n; k++) {
     const seat = (dealer + k) % n;
-    if (!m.players[seat].out) betOrder.push(seat);
+    if (active.includes(seat)) betOrder.push(seat);
   }
   return {
     number,
@@ -165,7 +181,9 @@ function dealCards(m: Match, dealer: number, number: number, rng: Rng): DealStat
     handCount: hands,
     dealt,
     arrangements: new Array(n).fill(null),
+    submitted: new Array(n).fill(false),
     crash: new Array(n).fill(false),
+    crashFrom: new Array(n).fill(null),
     position: 0,
     betOrder,
     bets: Array.from({ length: hands }, () => new Array(n).fill(null)),
@@ -209,11 +227,19 @@ export function orderHands(hands: Hand[]): Hand[] {
   return [...played, ...hands.filter((h) => h === null)];
 }
 
-/** Human locks in hands and chooses whether to call Crash. Computer players do the same. */
-export function lockIn(m: Match, arrangement: Arrangement, callCrash: boolean, rng: Rng = Math.random): Match {
+/** A person locks in their hands and chooses whether to call Crash. */
+export function submitArrangement(
+  m: Match,
+  seat: number,
+  arrangement: Arrangement,
+  callCrash: boolean,
+  rng: Rng = Math.random,
+): Match {
   if (m.phase !== 'arrange') throw new Error('Not arranging');
   const d = m.deal;
-  const err = validateArrangement(d.dealt[HUMAN], arrangement, d.handCount);
+  if (!d.active.includes(seat) || !m.players[seat].isHuman) throw new Error('Not your seat');
+  if (d.submitted[seat]) throw new Error('Hands already locked in');
+  const err = validateArrangement(d.dealt[seat], arrangement, d.handCount);
   if (err) throw new Error(err);
   if (callCrash && arrangement.hands.some((h) => h === null)) {
     throw new Error("You can't call Crash with a declined hand");
@@ -221,16 +247,59 @@ export function lockIn(m: Match, arrangement: Arrangement, callCrash: boolean, r
 
   const arrangements = d.arrangements.slice();
   const crash = d.crash.slice();
-  for (const seat of d.active) {
-    if (seat === HUMAN) {
-      arrangements[seat] = arrangement;
-      crash[seat] = callCrash;
-    } else {
-      arrangements[seat] = aiArrange(d.dealt[seat], d.handCount);
-      crash[seat] = aiCallsCrash(arrangements[seat]!, d.active.length, rng);
-    }
+  const submitted = d.submitted.slice();
+  arrangements[seat] = arrangement;
+  crash[seat] = callCrash;
+  submitted[seat] = true;
+  const crashFrom = d.crashFrom.slice();
+  if (callCrash) crashFrom[seat] = 0;
+  return beginIfReady({ ...m, deal: { ...d, arrangements, crash, crashFrom, submitted } }, rng);
+}
+
+/** Once every person at the table has locked in, computer players arrange and betting opens on hand 1. */
+function beginIfReady(m: Match, rng: Rng): Match {
+  const d = m.deal;
+  if (m.phase !== 'arrange' || d.active.some((s) => m.players[s].isHuman && !d.submitted[s])) return m;
+  const arrangements = d.arrangements.slice();
+  const crash = d.crash.slice();
+  const crashFrom = d.crashFrom.slice();
+  for (const s of d.active) {
+    if (m.players[s].isHuman) continue;
+    arrangements[s] = aiArrange(d.dealt[s], d.handCount);
+    crash[s] = aiCallsCrash(arrangements[s]!, d.active.length, rng);
+    if (crash[s]) crashFrom[s] = 0;
   }
-  return openBetting({ ...m, deal: { ...d, arrangements, crash } }, 0, rng);
+  return openBetting({ ...m, deal: { ...d, arrangements, crash, crashFrom } }, 0, rng);
+}
+
+/** Has `seat` won every hand turned over so far this deal? */
+export function unbeatenSoFar(d: DealState, seat: number): boolean {
+  return d.results.every((r) => d.active.every((o) => o === seat || r.values[seat]! > r.values[o]!));
+}
+
+/** Crash can be called before any hand is turned over, while you're still unbeaten and haven't bet on this hand. */
+export function canCallCrash(m: Match, seat: number): boolean {
+  const d = m.deal;
+  if (m.phase !== 'betting' || !d.active.includes(seat) || d.crash[seat]) return false;
+  if (d.bets[d.position][seat] !== null) return false;
+  if (d.arrangements[seat]?.hands.some((h) => h === null)) return false;
+  return unbeatenSoFar(d, seat);
+}
+
+/** Calls Crash mid-deal: from now on the caller must win every remaining hand (and bet on each). */
+export function callCrash(m: Match, seat: number): Match {
+  if (!canCallCrash(m, seat)) throw new Error("You can't call Crash now");
+  const d = m.deal;
+  const crash = d.crash.slice();
+  const crashFrom = d.crashFrom.slice();
+  crash[seat] = true;
+  crashFrom[seat] = d.position;
+  return { ...m, deal: { ...d, crash, crashFrom } };
+}
+
+/** Single-player shortcut: seat 0 locks in. */
+export function lockIn(m: Match, arrangement: Arrangement, callCrash: boolean, rng: Rng = Math.random): Match {
+  return submitArrangement(m, HUMAN, arrangement, callCrash, rng);
 }
 
 // ---------- betting ----------
@@ -256,36 +325,72 @@ function clampBet(m: Match, seat: number, amount: number): number {
   return Math.max(minBet(m, seat), Math.min(maxBet(m, seat), Math.floor(amount)));
 }
 
-/** Bets in turn order until it's the human's turn (or everyone has bet). */
+/** Seat whose turn it is to bet, or null once everyone has. */
+export function currentBettor(m: Match): number | null {
+  if (m.phase !== 'betting') return null;
+  const row = m.deal.bets[m.deal.position];
+  return m.deal.betOrder.find((s) => row[s] === null) ?? null;
+}
+
+/**
+ * Takes bets in turn order: computer players decide, seats that can't bet
+ * (declined hand, no credit) check automatically, and it stops at the first
+ * person who needs to choose.
+ */
 function runAiBets(m: Match, rng: Rng): Match {
-  const d = m.deal;
+  const d = m.deal; // bets and positions don't change inside the loop; crash calls update m
   const row = d.bets[d.position].slice();
   for (const seat of d.betOrder) {
     if (row[seat] !== null) continue;
-    if (seat === HUMAN) break;
-    const hand = d.arrangements[seat]!.hands[d.position];
-    const wanted = hand ? aiBet(m, seat, hand, row, rng) : 0;
-    row[seat] = clampBet(m, seat, wanted);
+    if (!canBet(m, seat)) {
+      row[seat] = 0;
+      continue;
+    }
+    if (m.players[seat].isHuman) break;
+    if (d.position > 0 && canCallCrash(m, seat) && aiCallsCrash(d.arrangements[seat]!, d.active.length, rng, d.position)) {
+      m = callCrash(m, seat);
+    }
+    const hand = d.arrangements[seat]!.hands[d.position]!;
+    row[seat] = clampBet(m, seat, aiBet(m, seat, hand, row, rng));
   }
-  const bets = d.bets.slice();
+  const bets = m.deal.bets.slice();
   bets[d.position] = row;
-  return { ...m, deal: { ...d, bets } };
+  return { ...m, deal: { ...m.deal, bets } };
 }
 
 function openBetting(m: Match, position: number, rng: Rng): Match {
   const next = runAiBets({ ...m, phase: 'betting', deal: { ...m.deal, position } }, rng);
-  return next.deal.bets[position][HUMAN] === null ? next : resolvePosition(next);
+  return next.deal.bets[position].some((b, s) => b === null && next.deal.active.includes(s)) ? next : resolvePosition(next);
 }
 
-/** The human's bet for the current hand. Remaining computer players then bet and the hand is revealed. */
-export function placeBet(m: Match, amount: number, rng: Rng = Math.random): Match {
+/** A person's bet on the current hand; later computer players then bet, and the hand turns over once all are in. */
+export function placeBetFor(m: Match, seat: number, amount: number, rng: Rng = Math.random): Match {
   if (m.phase !== 'betting') throw new Error('Not betting');
+  if (currentBettor(m) !== seat) throw new Error('Not your turn to bet');
   const d = m.deal;
-  const amt = clampBet(m, HUMAN, amount);
+  const amt = clampBet(m, seat, amount);
   const bets = d.bets.slice();
   bets[d.position] = bets[d.position].slice();
-  bets[d.position][HUMAN] = amt;
-  return resolvePosition(runAiBets({ ...m, deal: { ...d, bets } }, rng));
+  bets[d.position][seat] = amt;
+  const next = runAiBets({ ...m, deal: { ...d, bets } }, rng);
+  return currentBettor(next) === null ? resolvePosition(next) : next;
+}
+
+/** Single-player shortcut: seat 0 bets. */
+export function placeBet(m: Match, amount: number, rng: Rng = Math.random): Match {
+  return placeBetFor(m, HUMAN, amount, rng);
+}
+
+/** Acts for a person who has run out of time: computer arranging and betting. */
+export function actForSeat(m: Match, seat: number, rng: Rng = Math.random): Match {
+  if (m.phase === 'arrange' && m.deal.active.includes(seat) && !m.deal.submitted[seat]) {
+    return submitArrangement(m, seat, aiArrange(m.deal.dealt[seat], m.deal.handCount), false, rng);
+  }
+  if (m.phase === 'betting' && currentBettor(m) === seat) {
+    const hand = m.deal.arrangements[seat]!.hands[m.deal.position];
+    return placeBetFor(m, seat, hand ? aiBet(m, seat, hand, m.deal.bets[m.deal.position], rng) : 0, rng);
+  }
+  return m;
 }
 
 function resolvePosition(m: Match): Match {
@@ -380,6 +485,7 @@ function finishDeal(m: Match): Match {
           : pay(seat, o, RULES.crashMultiplier * totalBets(d, seat)),
       );
     crashResults.push({ player: seat, success, transfers });
+    if (!success) players[seat].sittingOut = true;
   }
 
   const eliminated: number[] = [];
@@ -398,15 +504,24 @@ function finishDeal(m: Match): Match {
   const outcome: DealOutcome = { legWinner: null, setWinner: null, gameWinner: null, eliminated, legTied: false };
 
   const standing = players.flatMap((p, s) => (p.out ? [] : [s]));
-  const top = Math.max(...standing.map((s) => points[s]));
-  if (top >= RULES.pointsPerLeg) {
-    const leaders = standing.filter((s) => points[s] === top);
-    if (leaders.length === 1) {
-      const w = leaders[0];
+  // Players sitting out can't win this leg; if only one player is left in it, they take it.
+  let inLeg = standing.filter((s) => !players[s].sittingOut);
+  if (inLeg.length === 0) {
+    // Everyone left in the leg missed a Crash at once: nobody sits out, the leg carries on.
+    standing.forEach((s) => (players[s].sittingOut = false));
+    inLeg = standing;
+  }
+  const top = Math.max(-1, ...inLeg.map((s) => points[s]));
+  const leaders = inLeg.filter((s) => points[s] === top);
+  const legOver = (top >= RULES.pointsPerLeg || inLeg.length === 1) && standing.length > 1;
+  if (legOver) {
+    if (leaders.length === 1 || inLeg.length === 1) {
+      const w = inLeg.length === 1 ? inLeg[0] : leaders[0];
       outcome.legWinner = w;
       legs[w]++;
       points = points.map(() => 0);
       legNumber++;
+      players.forEach((p) => (p.sittingOut = false));
       if (legs[w] >= RULES.legsPerSet) {
         outcome.setWinner = w;
         sets[w]++;
@@ -427,7 +542,8 @@ function finishDeal(m: Match): Match {
     outcome.gameWinner = winner;
     over = true;
   }
-  if (players[HUMAN].out) over = true;
+  // The game also ends once no people are left in it.
+  if (!players.some((p) => p.isHuman && !p.out)) over = true;
 
   return {
     ...m,
@@ -449,18 +565,19 @@ function startNextDeal(m: Match, rng: Rng): Match {
   let dealer = m.deal.dealer;
   do dealer = (dealer + 1) % n;
   while (m.players[dealer].out);
-  return { ...m, phase: 'arrange', outcome: null, deal: dealCards(m, dealer, m.deal.number + 1, rng) };
+  return beginIfReady({ ...m, phase: 'arrange', outcome: null, deal: dealCards(m, dealer, m.deal.number + 1, rng) }, rng);
 }
 
-/** Plays a whole deal for the human with the computer's choices (tests and simulations). */
+/** Plays a whole deal with the computer choosing for every person (tests and simulations). */
 export function autoPlayDeal(m: Match, rng: Rng, humanCrash = false): Match {
-  const arr = aiArrange(m.deal.dealt[HUMAN], m.deal.handCount);
-  let x = lockIn(m, arr, humanCrash && arr.hands.every((h) => h !== null), rng);
+  let x = m;
+  for (const seat of x.deal.active) {
+    if (!x.players[seat].isHuman) continue;
+    const arr = aiArrange(x.deal.dealt[seat], x.deal.handCount);
+    x = submitArrangement(x, seat, arr, humanCrash && arr.hands.every((h) => h !== null), rng);
+  }
   while (x.phase === 'betting' || x.phase === 'reveal') {
-    if (x.phase === 'betting') {
-      const hand = x.deal.arrangements[HUMAN]!.hands[x.deal.position];
-      x = placeBet(x, hand ? aiBet(x, HUMAN, hand, x.deal.bets[x.deal.position], rng) : 0, rng);
-    } else x = advance(x, rng);
+    x = x.phase === 'betting' ? actForSeat(x, currentBettor(x)!, rng) : advance(x, rng);
   }
   return x;
 }

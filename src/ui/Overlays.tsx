@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { motion } from 'motion/react';
 import confetti from 'canvas-confetti';
-import { HUMAN, RULES, type Match } from '../engine/match.ts';
+import { RULES, type Match } from '../engine/match.ts';
+import type { ReactNode } from 'react';
 import { Coin, Tokens } from './Token.tsx';
 import { SEAT_COLORS } from './SeatRail.tsx';
 
@@ -14,7 +15,7 @@ const burst = (colors = ['#d8b56a', '#f3dc9c', '#f7f4ec', '#6fb7a0']) => {
 };
 
 /** Full-screen "CRASH" takeover. */
-export function CrashTakeover({ m, onDone }: { m: Match; onDone: () => void }) {
+export function CrashTakeover({ m, me, onDone }: { m: Match; me: number; onDone: () => void }) {
   const results = m.deal.crashResults;
   const anyWin = results.some((r) => r.success);
   useEffect(() => {
@@ -28,11 +29,45 @@ export function CrashTakeover({ m, onDone }: { m: Match; onDone: () => void }) {
       role="dialog"
       aria-label="Crash"
       initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+      animate={{ opacity: 1, x: [0, -18, 16, -12, 9, -5, 0], y: [0, 10, -8, 6, -3, 0] }}
+      transition={{ opacity: { duration: 0.15 }, x: { duration: 0.6, delay: 0.2 }, y: { duration: 0.6, delay: 0.2 } }}
       exit={{ opacity: 0 }}
       onClick={onDone}
     >
       <motion.div className="takeover-flash" initial={{ opacity: 0.9 }} animate={{ opacity: 0 }} transition={{ duration: 0.8 }} />
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="shockwave"
+          initial={{ scale: 0.1, opacity: 0.9 }}
+          animate={{ scale: 3.2, opacity: 0 }}
+          transition={{ duration: 1.3, delay: 0.25 + i * 0.22, ease: [0.1, 0.7, 0.3, 1] }}
+        />
+      ))}
+      <svg className="cracks" viewBox="0 0 400 800" preserveAspectRatio="none" aria-hidden="true">
+        {[
+          'M200 400 L150 330 L165 280 L110 200 L125 150 L60 60',
+          'M200 400 L260 350 L250 300 L320 240 L310 180 L390 110',
+          'M200 400 L140 460 L160 520 L80 600 L100 680 L30 790',
+          'M200 400 L270 470 L250 540 L330 610 L310 690 L380 790',
+          'M200 400 L60 410 L20 380',
+          'M200 400 L340 420 L395 400',
+        ].map((d, i) => (
+          <motion.path key={i} d={d} initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0, 1, 0.55] }} transition={{ duration: 0.45, delay: 0.18 + i * 0.03, ease: 'easeOut' }} />
+        ))}
+      </svg>
+      {Array.from({ length: 18 }, (_, i) => {
+        const a = (i / 18) * Math.PI * 2;
+        return (
+          <motion.span
+            key={`e${i}`}
+            className="ember"
+            initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+            animate={{ x: Math.cos(a) * (140 + (i % 4) * 50), y: Math.sin(a) * (140 + (i % 3) * 60), opacity: 0, scale: 0.2 }}
+            transition={{ duration: 1.1, delay: 0.3, ease: 'easeOut' }}
+          />
+        );
+      })}
       <motion.div
         className="crash-word"
         initial={{ scale: 3.2, opacity: 0, rotate: -6 }}
@@ -52,12 +87,12 @@ export function CrashTakeover({ m, onDone }: { m: Match; onDone: () => void }) {
           return (
             <div key={r.player} className="crash-line">
               <h3>
-                {who.isHuman ? 'You' : who.name} {r.success ? 'crashed the table!' : 'called Crash… and missed.'}
+                {r.player === me ? 'You' : who.name} {r.success ? 'crashed the table!' : 'called Crash… and missed.'}
               </h3>
               <p>
                 {r.success
                   ? `Won every hand. Every opponent pays double their bets — total `
-                  : `Lost a hand, so each opponent is paid double your bets — total `}
+                  : `Lost a hand: out for the rest of this leg, and each opponent is paid double the bets — total `}
                 <b>
                   <Coin size={14} /> {total.toLocaleString('en-GB')}
                 </b>
@@ -72,32 +107,40 @@ export function CrashTakeover({ m, onDone }: { m: Match; onDone: () => void }) {
 }
 
 /** End-of-deal summary with leg, set and game news. */
-export function DealSummary({ m, onNext, onHome }: { m: Match; onNext: () => void; onHome: () => void }) {
+export function DealSummary({
+  m,
+  me,
+  onNext,
+  onHome,
+  nextLabel,
+  gameOverAction,
+}: {
+  m: Match;
+  me: number;
+  onNext: () => void;
+  onHome: () => void;
+  nextLabel?: string;
+  gameOverAction?: ReactNode;
+}) {
   const o = m.outcome!;
   const d = m.deal;
   const over = m.phase === 'gameOver';
   const big = o.gameWinner ?? o.setWinner ?? o.legWinner;
-  const humanWon = big === HUMAN;
-
-  useEffect(() => {
-    if (big !== null && humanWon) burst();
-    if (big !== null) navigator.vibrate?.([30, 30, 60]);
-  }, [big, humanWon]);
 
   const headline = over
-    ? m.players[HUMAN].out
+    ? m.players[me].out
       ? 'You’re out'
-      : m.winner === HUMAN
+      : m.winner === me
         ? 'You win the game!'
         : `${m.players[m.winner!].name} wins the game`
     : o.setWinner !== null
-      ? `${o.setWinner === HUMAN ? 'You win' : `${m.players[o.setWinner].name} wins`} the set`
+      ? `${o.setWinner === me ? 'You win' : `${m.players[o.setWinner].name} wins`} the set`
       : o.legWinner !== null
-        ? `${o.legWinner === HUMAN ? 'You win' : `${m.players[o.legWinner].name} wins`} the leg`
+        ? `${o.legWinner === me ? 'You win' : `${m.players[o.legWinner].name} wins`} the leg`
         : `Deal ${d.number} done`;
 
   const sub = over
-    ? m.players[HUMAN].out
+    ? m.players[me].out
       ? `Your debt hit ${(-RULES.debtLimit).toLocaleString('en-GB')} tokens.`
       : `${m.sets[m.winner!]} sets to ${Math.max(...m.sets.filter((_, s) => s !== m.winner))}.`
     : o.legTied
@@ -148,6 +191,7 @@ export function DealSummary({ m, onNext, onHome }: { m: Match; onNext: () => voi
                     <i className="dot" style={{ background: SEAT_COLORS[s] }} />
                     {p.name}
                     {o.eliminated.includes(s) && <em> · out</em>}
+                    {!o.eliminated.includes(s) && p.sittingOut && <em> · sits out</em>}
                   </td>
                   <td>+{d.pointsThisDeal[s]}</td>
                   <td className={delta < 0 ? 'neg' : delta > 0 ? 'pos' : ''}>
@@ -164,16 +208,18 @@ export function DealSummary({ m, onNext, onHome }: { m: Match; onNext: () => voi
 
         <div className="balance">
           <span>Your balance</span>
-          <Tokens value={m.players[HUMAN].tokens} size={18} />
+          <Tokens value={m.players[me].tokens} size={18} />
         </div>
 
         {over ? (
-          <button type="button" className="btn gold wide" onClick={onHome}>
-            New game
-          </button>
+          (gameOverAction ?? (
+            <button type="button" className="btn gold wide" onClick={onHome}>
+              New game
+            </button>
+          ))
         ) : (
           <button type="button" className="btn gold wide" onClick={onNext}>
-            Deal again
+            {nextLabel ?? 'Deal again'}
           </button>
         )}
       </motion.section>
