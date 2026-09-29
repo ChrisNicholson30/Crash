@@ -6,13 +6,17 @@ export const RULES = {
   pointsPerLeg: 10,
   legsPerSet: 3,
   setsToWin: 3,
-  startTokens: 1000,
+  startTokens: 10_000,
   /** A player whose balance reaches -debtLimit is out. */
   debtLimit: 5000,
   /** A player who calls Crash must bet at least this on every hand they play. */
-  crashMinBet: 50,
+  /** Every hand you play is bet on: at least this much (or whatever credit is left). */
+  minBet: 100,
+  crashMinBet: 500,
   /** Crash settles at this multiple of the loser's bets for the deal. */
   crashMultiplier: 2,
+  /** Pot for each set, won by a successful Crash; refills when a new set starts. */
+  setPot: 100_000,
 } as const;
 
 /** Cards dealt and hands made, by number of players still in. */
@@ -63,6 +67,8 @@ export interface CrashResult {
   player: number;
   success: boolean;
   transfers: Transfer[];
+  /** Set pot won (success only). */
+  setPot: number;
 }
 
 export interface DealState {
@@ -103,7 +109,7 @@ export interface DealOutcome {
 export type Phase = 'arrange' | 'betting' | 'reveal' | 'dealEnd' | 'gameOver';
 
 export interface Match {
-  version: 2;
+  version: 3;
   players: Player[];
   /** Points in the current leg. */
   points: number[];
@@ -112,6 +118,8 @@ export interface Match {
   sets: number[];
   setNumber: number;
   legNumber: number;
+  /** Tokens waiting for the next successful Crash this set. */
+  setPot: number;
   phase: Phase;
   deal: DealState;
   outcome: DealOutcome | null;
@@ -145,13 +153,14 @@ export function newMatchWith(seats: { name: string; isHuman: boolean; id?: strin
   const zeros = () => new Array<number>(playerCount).fill(0);
   const dealer = Math.floor(rng() * playerCount);
   const shell: Match = {
-    version: 2,
+    version: 3,
     players,
     points: zeros(),
     legs: zeros(),
     sets: zeros(),
     setNumber: 1,
     legNumber: 1,
+    setPot: RULES.setPot,
     phase: 'arrange',
     deal: undefined as unknown as DealState,
     outcome: null,
@@ -309,11 +318,11 @@ export function maxBet(m: Match, seat: number): number {
   return Math.max(0, m.players[seat].tokens + RULES.debtLimit);
 }
 
-/** Smallest bet: 0, or the Crash minimum for a player who called Crash. */
+/** Smallest bet on a hand you play: the table minimum, or the Crash minimum for a player who called Crash. */
 export function minBet(m: Match, seat: number): number {
   const d = m.deal;
   if (d.arrangements[seat]?.hands[d.position] == null) return 0;
-  return d.crash[seat] ? Math.min(RULES.crashMinBet, maxBet(m, seat)) : 0;
+  return Math.min(d.crash[seat] ? RULES.crashMinBet : RULES.minBet, maxBet(m, seat));
 }
 
 function canBet(m: Match, seat: number): boolean {
@@ -472,20 +481,30 @@ function finishDeal(m: Match): Match {
     return { from, to, amount: paid };
   };
 
-  // Crash: win every hand and each opponent pays double their bets; fail and you pay each opponent double yours.
+  // Crash: win every hand and you take the set pot, and each opponent pays double their bets.
+  // Miss and you lose half your tokens (half your remaining credit if in debt), shared among
+  // your opponents — and you sit out the rest of the leg.
+  let setPot = m.setPot;
   const crashResults: CrashResult[] = [];
   for (const seat of d.betOrder) {
     if (!d.crash[seat]) continue;
     const success = wonEveryHand(d, seat);
-    const transfers = d.active
-      .filter((o) => o !== seat)
-      .map((o) =>
-        success
-          ? pay(o, seat, RULES.crashMultiplier * totalBets(d, o))
-          : pay(seat, o, RULES.crashMultiplier * totalBets(d, seat)),
-      );
-    crashResults.push({ player: seat, success, transfers });
-    if (!success) players[seat].sittingOut = true;
+    const opponents = d.active.filter((o) => o !== seat);
+    let transfers: Transfer[];
+    let won = 0;
+    if (success) {
+      transfers = opponents.map((o) => pay(o, seat, RULES.crashMultiplier * totalBets(d, o)));
+      won = setPot;
+      players[seat].tokens += won;
+      setPot = 0;
+    } else {
+      const t = players[seat].tokens;
+      const loss = Math.floor((t > 0 ? t : t + RULES.debtLimit) / 2);
+      const share = Math.floor(loss / opponents.length);
+      transfers = opponents.map((o, i) => pay(seat, o, share + (i === 0 ? loss - share * opponents.length : 0)));
+      players[seat].sittingOut = true;
+    }
+    crashResults.push({ player: seat, success, transfers, setPot: won });
   }
 
   const eliminated: number[] = [];
@@ -525,6 +544,7 @@ function finishDeal(m: Match): Match {
       if (legs[w] >= RULES.legsPerSet) {
         outcome.setWinner = w;
         sets[w]++;
+        setPot = RULES.setPot;
         legs = legs.map(() => 0);
         setNumber++;
         legNumber = 1;
@@ -553,6 +573,7 @@ function finishDeal(m: Match): Match {
     sets,
     legNumber,
     setNumber,
+    setPot,
     outcome,
     winner,
     phase: over ? 'gameOver' : 'dealEnd',

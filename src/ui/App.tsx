@@ -11,13 +11,13 @@ import { Conversation } from './online/Conversation.tsx';
 import { RoomScreen } from './online/RoomScreen.tsx';
 import { Backdrop } from './Fx.tsx';
 
-const STORAGE_KEY = 'crash:match:v3';
+const STORAGE_KEY = 'crash:match:v4';
 
 function load(): Match | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const m = raw ? (JSON.parse(raw) as Match) : null;
-    return m?.version === 2 ? m : null;
+    return m?.version === 3 ? m : null;
   } catch {
     return null;
   }

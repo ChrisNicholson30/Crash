@@ -170,18 +170,35 @@ describe('a deal', () => {
       expect(t.to).toBe(HUMAN);
       expect(t.amount).toBe(RULES.crashMultiplier * bets);
     }
-    expect(totalTokens(m)).toBe(before); // tokens only move between players
+    expect(crash.setPot).toBe(RULES.setPot);
+    expect(m.setPot).toBe(0); // won — refills when the next set starts
+    expect(totalTokens(m)).toBe(before + RULES.setPot); // otherwise tokens only move between players
   });
 
-  it('a failed Crash makes the caller pay each opponent double their own bets', () => {
+  it('a failed Crash costs the caller half their tokens, shared among the opponents', () => {
     const weak = h('2H 5H 7H 3C 6C 8C 2D 4D 9D 3S 5S 7S 10H');
     let m = rig(newMatch(4, 'Chris', mulberry32(4)), weak);
     m = lockIn(m, aiArrange(m.deal.dealt[HUMAN], 4), true, mulberry32(2));
-    m = playOut(m, 50);
+    let before = 0;
+    while (m.phase === 'betting' || m.phase === 'reveal') {
+      if (m.phase === 'reveal' && m.deal.position === m.deal.handCount - 1) before = m.players[HUMAN].tokens;
+      m = m.phase === 'betting' ? placeBet(m, 0, mulberry32(5)) : advance(m, mulberry32(5));
+    }
     const crash = m.deal.crashResults.find((c) => c.player === HUMAN)!;
     expect(crash.success).toBe(false);
     expect(crash.transfers).toHaveLength(3);
-    for (const t of crash.transfers) expect(t).toMatchObject({ from: HUMAN, amount: 2 * 4 * 50 });
+    const paid = crash.transfers.reduce((s, t) => s + t.amount, 0);
+    expect(paid).toBe(Math.floor(before / 2));
+    expect(m.players[HUMAN].tokens).toBe(before - paid);
+    expect(m.players[HUMAN].sittingOut).toBe(true);
+  });
+
+  it('every hand you play carries at least the table minimum', () => {
+    let m = rig(newMatch(4, 'Chris', mulberry32(1)), monster);
+    m = lockIn(m, aiArrange(m.deal.dealt[HUMAN], 4), false, mulberry32(2));
+    expect(minBet(m, HUMAN)).toBe(RULES.minBet);
+    m = placeBet(m, 0, mulberry32(3));
+    expect(m.deal.results[0].bets.filter((b) => b > 0)).toHaveLength(4);
   });
 
   it('Crash callers must bet at least the minimum', () => {
@@ -195,10 +212,10 @@ describe('a deal', () => {
   it('debt is capped at the limit and puts the player out', () => {
     const weak = h('2H 5H 7H 3C 6C 8C 2D 4D 9D 3S 5S 7S 10H');
     let m = rig(newMatch(4, 'Chris', mulberry32(4)), weak);
-    m = { ...m, players: m.players.map((p, s) => (s === HUMAN ? { ...p, tokens: -4000 } : p)) };
-    expect(maxBet(m, HUMAN)).toBe(1000);
+    m = { ...m, players: m.players.map((p, s) => (s === HUMAN ? { ...p, tokens: -3000 } : p)) };
+    expect(maxBet(m, HUMAN)).toBe(2000);
     m = lockIn(m, aiArrange(m.deal.dealt[HUMAN], 4), true, mulberry32(2));
-    m = playOut(m, 250);
+    m = playOut(m, 500); // loses the pots: -5000
     expect(m.players[HUMAN].tokens).toBe(-RULES.debtLimit);
     expect(m.players[HUMAN].out).toBe(true);
     expect(m.phase).toBe('gameOver');
@@ -315,8 +332,9 @@ describe('several people at one table', () => {
     let m = newMatchWith(seats, rng);
     let deals = 0;
     while (m.phase !== 'gameOver' && deals < 400) {
+      const before = totalTokens(m);
       m = autoPlayDeal(m, rng);
-      expect(totalTokens(m)).toBe(4 * RULES.startTokens);
+      expect(totalTokens(m)).toBe(before + m.deal.crashResults.reduce((s, c) => s + c.setPot, 0));
       if (m.phase === 'dealEnd') m = advance(m, rng);
       deals++;
     }
@@ -328,11 +346,13 @@ describe('a whole match', () => {
   it.each([3, 4] as const)('all-computer %i-player match ends with a winner and conserves tokens', (count) => {
     const rng = mulberry32(count * 7);
     let m = newMatch(count, 'Bot', rng);
-    const start = totalTokens(m);
+    let start = totalTokens(m);
     let deals = 0;
     while (m.phase !== 'gameOver' && deals < 400) {
       m = autoPlayDeal(m, rng, rng() < 0.05);
-      expect(totalTokens(m)).toBe(start);
+      const potsWon = m.deal.crashResults.reduce((s, c) => s + c.setPot, 0);
+      expect(totalTokens(m)).toBe(start + potsWon);
+      start += potsWon;
       if (m.phase === 'dealEnd') m = advance(m, rng);
       deals++;
     }

@@ -4,7 +4,7 @@
 //
 // Run: node --experimental-transform-types --no-warnings scripts/online-smoke.ts [baseUrl] [deals]
 import { aiArrange } from '../src/engine/ai.ts';
-import { currentBettor, minBet, type Match } from '../src/engine/match.ts';
+import { RULES, currentBettor, minBet, type Match } from '../src/engine/match.ts';
 import type { ServerMsg } from '../src/net/protocol.ts';
 
 const BASE = process.argv[2] ?? 'http://localhost:8787';
@@ -127,7 +127,7 @@ while (Date.now() < deadline) {
     if (m.phase === 'arrange' && m.deal.active.includes(me) && !m.deal.submitted[me]) {
       s.ws.send(JSON.stringify({ t: 'arrange', arrangement: aiArrange(m.deal.dealt[me], m.deal.handCount), crash: false }));
     } else if (m.phase === 'betting' && currentBettor(m) === me) {
-      s.ws.send(JSON.stringify({ t: 'bet', amount: Math.max(25, minBet(m, me)) }));
+      s.ws.send(JSON.stringify({ t: 'bet', amount: Math.max(RULES.minBet, minBet(m, me)) }));
     } else if ((m.phase === 'reveal' || m.phase === 'dealEnd') && !s.last!.room.ready.includes(s.c === alice ? aliceMe.id : bobMe.id)) {
       s.ws.send(JSON.stringify({ t: 'next' }));
     }
@@ -140,7 +140,9 @@ const final = A.last!.match!;
 assert(final.deal.number > DEALS || final.phase === 'gameOver', `played ${DEALS} deals (got to deal ${final.deal.number}, phase ${final.phase})`);
 assert(checkedPrivacy, 'privacy checked during betting');
 const total = final.players.reduce((s, p) => s + p.tokens, 0);
-assert(total === 4000, `tokens conserved (${total})`);
+// Tokens only move between players, except a successful Crash, which adds the set pot.
+const potsPaid = RULES.setPot * (final.setNumber - 1) + (RULES.setPot - final.setPot);
+assert(total === 4 * RULES.startTokens + potsPaid, `tokens conserved (${total})`);
 assert(seatsOf(A) !== seatsOf(B), 'different seats');
 const unexpected = [...A.errors, ...B.errors].filter((e) => !/host/.test(e));
 assert(unexpected.length === 0, `no errors during play: ${unexpected.join('; ')}`);

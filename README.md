@@ -12,11 +12,11 @@ The three-card hand game for 3 or 4 players, as an installable web app (PWA). Pl
 - **Hands, best first:** Prile (three of a kind) · Stiff (three in a row, same suit) · Run (three in a row) · Flush (same suit). Nothing else counts. Ties go to the highest card, then the next. Aces are high (Q-K-A) or low (A-2-3, the lowest run), and runs don't wrap.
 - **Order:** hands line up strongest first, weakest last. A hand you can't make can be **declined**; a declined hand loses to any real hand.
 - **Play:** hands are played one at a time. Each hand is compared with every opponent's hand in the same position, and each win scores 1 point.
-- **Betting:** everyone starts with 1,000 Barney tokens. Before each hand, players bet in turn into the pot, and the best hand among those who bet takes it. You can bet on credit down to −5,000; reach that and you're out.
+- **Betting:** everyone starts with 10,000 Barney tokens. On every hand you either **bet** (at least 100) or **Crash**. The best hand takes the pot. You can bet on credit down to −5,000; reach that and you're out.
 - **Crash:** when locking in, or before any later hand while still unbeaten, a player can call Crash, predicting they'll win every hand. Everyone is told straight away.
-  - Pull it off and each opponent pays double their bets for the deal.
-  - Miss and the caller pays each opponent double their own bets, and sits out the rest of the leg.
-  - Crash callers must bet at least 50 on every hand.
+  - Pull it off and you win the **100,000 set pot** (it refills each set), and each opponent pays double their bets for the deal.
+  - Miss and you lose **half your tokens** to the others, and sit out the rest of the leg.
+  - Crash bets are at least 500.
 - **Match:** first to 10 points wins a leg, 3 legs win a set, and 3 sets win the game. Being the last player standing also wins.
 
 ## Develop

@@ -265,7 +265,7 @@ function Builder({ m, me, onLock, deadline }: Props) {
       <AnimatePresence>
         {crash && (
           <motion.p className="crash-hint" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            Crash called: win every hand and each opponent pays you double their bets. Lose one and you pay each of them double yours.
+            Crash called: win every hand to take the set pot plus double everyone’s bets. Lose one and you lose half your tokens — and sit out the leg.
           </motion.p>
         )}
       </AnimatePresence>

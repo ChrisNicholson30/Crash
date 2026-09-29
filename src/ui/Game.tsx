@@ -6,7 +6,9 @@ import { ArrangeView } from './ArrangeView.tsx';
 import { PlayView } from './PlayView.tsx';
 import { CrashTakeover, DealSummary } from './Overlays.tsx';
 import { RulesSheet } from './RulesSheet.tsx';
-import { Celebration } from './Fx.tsx';
+import { Celebration, LaughBurst } from './Fx.tsx';
+import { Coin } from './Token.tsx';
+import { RULES } from '../engine/match.ts';
 
 export interface GameActions {
   lock: (arr: Arrangement, crash: boolean) => void;
@@ -61,6 +63,7 @@ export function Game({ m, me, actions, nextLabel, deadline, extra, subtitle, gam
         </header>
 
         <SeatRail m={m} me={me} />
+        <SetPot m={m} />
         <CrashAlerts m={m} me={me} />
 
         <AnimatePresence mode="wait">
@@ -113,6 +116,7 @@ export function Game({ m, me, actions, nextLabel, deadline, extra, subtitle, gam
         )}
       </AnimatePresence>
       <AnimatePresence>{rules && <RulesSheet onClose={() => setRules(false)} />}</AnimatePresence>
+      <Laughs m={m} me={me} paused={showCrash || showParty} />
     </>
   );
 }
@@ -171,4 +175,60 @@ export function useCountdown(deadline?: number | null): number | null {
     return () => clearInterval(t);
   }, [deadline]);
   return deadline ? Math.max(0, Math.ceil((deadline - now) / 1000)) : null;
+}
+
+/** The set pot, waiting for someone brave enough to Crash. */
+function SetPot({ m }: { m: Match }) {
+  const full = m.setPot > 0;
+  return (
+    <motion.div className={`setpot${full ? '' : ' empty'}`} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
+      <Coin size={16} />
+      <span>{full ? 'Set pot' : 'Set pot won'}</span>
+      <b>{full ? m.setPot.toLocaleString('en-GB') : `refills to ${RULES.setPot.toLocaleString('en-GB')} next set`}</b>
+      {full && <small>Crash to win it</small>}
+    </motion.div>
+  );
+}
+
+/** 😂 when someone makes a hilarious mistake: a flopped Crash, a big bet on the worst hand, or going bust. */
+function Laughs({ m, me, paused }: { m: Match; me: number; paused: boolean }) {
+  const seen = useRef<Set<string>>(new Set());
+  const [queue, setQueue] = useState<{ key: string; caption: string }[]>([]);
+  const who = (s: number) => (s === me ? 'You' : m.players[s].name);
+
+  useEffect(() => {
+    const d = m.deal;
+    const found: { key: string; caption: string }[] = [];
+    const add = (key: string, caption: string) => {
+      if (seen.current.has(key)) return;
+      seen.current.add(key);
+      found.push({ key, caption });
+    };
+    // A big bet on the weakest hand at the table.
+    const r = m.phase === 'reveal' ? d.results[d.position] : null;
+    if (r) {
+      const low = Math.min(...d.active.map((s) => r.values[s]!));
+      for (const s of d.active) {
+        const beatenByAll = d.active.every((o) => o === s || r.values[o]! > r.values[s]!);
+        if (r.bets[s] >= RULES.minBet * 10 && r.values[s] === low && beatenByAll) {
+          add(`bet${d.number}:${d.position}:${s}`, `${who(s)} bet ${r.bets[s].toLocaleString('en-GB')} on the worst hand`);
+        }
+      }
+    }
+    if (m.phase === 'dealEnd' || m.phase === 'gameOver') {
+      for (const c of d.crashResults) {
+        if (!c.success) add(`crash${d.number}:${c.player}`, `${who(c.player)} called Crash… and flopped`);
+      }
+      for (const s of m.outcome?.eliminated ?? []) add(`bust${d.number}:${s}`, `${who(s)} went bust`);
+    }
+    if (found.length) setQueue((q) => [...q, ...found]);
+  }, [m]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Wait for the CRASH takeover / celebration to close so the laugh isn't hidden behind it.
+  const current = paused ? undefined : queue[0];
+  return (
+    <AnimatePresence>
+      {current && <LaughBurst key={current.key} caption={current.caption} onDone={() => setQueue((q) => q.slice(1))} />}
+    </AnimatePresence>
+  );
 }

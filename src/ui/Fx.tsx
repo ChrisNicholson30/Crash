@@ -141,3 +141,61 @@ export function Celebration({
     </motion.div>
   );
 }
+
+/** A shower of laughing faces, for a hilarious mistake. */
+export function LaughBurst({ caption, onDone }: { caption: string; onDone: () => void }) {
+  const done = useRef(onDone);
+  done.current = onDone;
+  const faces = useMemo(
+    () =>
+      Array.from({ length: 16 }, (_, i) => ({
+        ch: i % 3 === 0 ? '🤣' : '😂',
+        x: 6 + ((i * 53) % 88),
+        size: 26 + ((i * 11) % 26),
+        delay: (i % 8) * 0.07,
+        spin: (i % 2 ? 1 : -1) * (10 + (i % 5) * 8),
+      })),
+    [],
+  );
+  useEffect(() => {
+    navigator.vibrate?.([20, 40, 20, 40, 20, 40, 20]);
+    const t = setTimeout(() => done.current(), 3000);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <div className="laugh" aria-live="polite">
+      <motion.div className="laugh-dim" initial={{ opacity: 0 }} animate={{ opacity: [0, 1, 1, 0] }} transition={{ duration: 2.9, times: [0, 0.1, 0.8, 1] }} />
+      {/* One giant face that bursts in, rocks with laughter, then shrinks away. */}
+      <motion.span
+        className="laugh-giant"
+        aria-hidden="true"
+        initial={{ scale: 0, rotate: -30, opacity: 0 }}
+        animate={{
+          scale: [0, 1.15, 1, 1.06, 1, 1.06, 1, 0],
+          rotate: [-30, 8, -12, 12, -12, 12, -6, 20],
+          y: [40, 0, -18, 0, -18, 0, -10, 60],
+          opacity: [0, 1, 1, 1, 1, 1, 1, 0],
+        }}
+        transition={{ duration: 2.8, times: [0, 0.14, 0.26, 0.38, 0.5, 0.62, 0.76, 1], ease: 'easeInOut' }}
+      >
+        😂
+      </motion.span>
+      <motion.div className="laugh-caption" initial={{ y: -30, opacity: 0, scale: 0.8 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+        <span>😂</span> {caption}
+      </motion.div>
+      {!reduced() &&
+        faces.map((f, i) => (
+          <motion.span
+            key={i}
+            className="laugh-face"
+            style={{ left: `${f.x}%`, fontSize: f.size }}
+            initial={{ y: 0, opacity: 0, rotate: 0, scale: 0.5 }}
+            animate={{ y: -window.innerHeight * 0.75, opacity: [0, 1, 1, 0], rotate: f.spin, scale: [0.5, 1.2, 1] }}
+            transition={{ duration: 2.2, delay: f.delay, ease: 'easeOut' }}
+          >
+            {f.ch}
+          </motion.span>
+        ))}
+    </div>
+  );
+}

@@ -849,3 +849,430 @@
   letter-spacing: 0;
   text-transform: none;
 }
+
+/* ---------- Full-table board: a row per hand, a column per player ---------- */
+
+.play .stage-head {
+  align-items: center;
+}
+.play .pot {
+  margin: 0;
+  padding: 6px 14px 6px 8px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.play .pot-num {
+  font-size: 20px;
+}
+.board {
+  display: grid;
+  gap: 5px;
+}
+.board-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px repeat(var(--cols), minmax(0, 1fr));
+  gap: 4px;
+  align-items: center;
+  padding: 5px 4px;
+  border-radius: 14px;
+  transition:
+    background 0.3s,
+    box-shadow 0.3s;
+}
+.board-row.live {
+  background: rgb(216 181 106 / 0.1);
+  box-shadow:
+    inset 0 0 0 1.5px rgb(216 181 106 / 0.55),
+    0 10px 30px -18px rgb(216 181 106 / 0.6);
+}
+.board-row.later {
+  opacity: 0.78;
+}
+.board-head {
+  padding-bottom: 2px;
+}
+.board-num {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--brass);
+  text-align: center;
+}
+.board-row.live .board-num {
+  color: var(--brass-hi);
+}
+.board-player {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 6px 2px;
+  border-radius: 12px;
+  font-size: 11px;
+  text-align: center;
+}
+.board-player b {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--seat);
+  font-size: 12px;
+}
+.board-player.me {
+  background: rgb(216 181 106 / 0.08);
+}
+.board-player.turn {
+  animation: breathe 1.6s ease-in-out infinite;
+}
+.board-player.crashing {
+  animation: redpulse 1.4s ease-in-out infinite;
+}
+.board-player .tile-crash {
+  margin: 0;
+}
+.board-bet {
+  min-height: 22px;
+  display: grid;
+  place-items: center;
+}
+.board-bet .bet-chip {
+  padding: 2px 7px;
+  font-size: 11px;
+}
+.cell {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 6px 2px 4px;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 0.2);
+  transition: box-shadow 0.3s;
+}
+.cell.me {
+  background: rgb(216 181 106 / 0.07);
+}
+.cell.top {
+  box-shadow:
+    inset 0 0 0 1.5px var(--brass),
+    0 0 18px -4px rgb(243 220 156 / 0.55);
+}
+.cell-cards {
+  display: flex;
+  gap: 2px;
+}
+.cell .pc-xs {
+  --w: 23px;
+}
+.cell .pc-xs .pc-corner b {
+  font-size: 10px;
+}
+.cell-foot {
+  display: flex;
+  gap: 4px;
+  min-height: 13px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.cell-cat {
+  color: var(--text);
+}
+.cell-pts {
+  color: var(--muted);
+}
+.cell-pts.won {
+  color: var(--pos);
+}
+.cell-declined {
+  display: grid;
+  place-items: center;
+  height: calc(23px * 1.4);
+  font-size: 10px;
+  color: var(--muted);
+}
+.cell .pot-win {
+  top: -12px;
+  right: 50%;
+  translate: 50% 0;
+  padding: 2px 7px;
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 3;
+}
+@media (min-width: 420px) {
+  .cell .pc-xs {
+    --w: 28px;
+  }
+  .cell-declined {
+    height: calc(28px * 1.4);
+  }
+}
+
+/* ---------- Bet or Crash ---------- */
+
+.bet-actions.two {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 8px;
+}
+.bet-actions.two > :only-child {
+  grid-column: 1 / -1;
+}
+.big-crash,
+.big-bet {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  min-height: 62px;
+  border-radius: 16px;
+}
+.big-crash {
+  color: #fff;
+  background: linear-gradient(180deg, #ff6a5b, #c9261a);
+  border: 0;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    0 10px 26px -8px rgb(255 77 61 / 0.7);
+  animation: redpulse 1.8s ease-in-out infinite;
+}
+.crash-word-sm {
+  font-family: var(--display);
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: 0.12em;
+  line-height: 1.1;
+  text-shadow: 0 2px 0 #7a150c;
+}
+.big-crash small,
+.big-bet small {
+  font-family: var(--ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.8;
+}
+.big-bet span {
+  font-size: 18px;
+}
+.reset-link {
+  margin-left: 8px;
+  padding: 0;
+  color: var(--brass-hi);
+  font-size: 11px;
+  text-decoration: underline;
+}
+
+/* ---------- Set pot ---------- */
+
+@keyframes potglow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgb(216 181 106 / 0.45),
+      0 0 18px -6px rgb(243 220 156 / 0.5);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgb(243 220 156 / 0.8),
+      0 0 30px -4px rgb(243 220 156 / 0.7);
+  }
+}
+.setpot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 10px auto 0;
+  padding: 7px 14px;
+  border-radius: 99px;
+  font-size: 12px;
+  background: linear-gradient(90deg, rgb(60 44 12 / 0.85), rgb(30 24 8 / 0.85));
+  animation: potglow 2.4s ease-in-out infinite;
+}
+.setpot span {
+  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+.setpot b {
+  font-family: var(--display);
+  font-size: 18px;
+  color: var(--brass-hi);
+  font-variant-numeric: tabular-nums;
+}
+.setpot small {
+  color: #ffb2a8;
+  font-weight: 700;
+}
+.setpot.empty {
+  animation: none;
+  background: rgb(0 0 0 / 0.25);
+}
+.setpot.empty b {
+  font-family: var(--ui);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- Laughs ---------- */
+
+.laugh {
+  position: fixed;
+  inset: 0;
+  z-index: 58;
+  pointer-events: none;
+  overflow: hidden;
+}
+.laugh-caption {
+  position: absolute;
+  top: calc(18px + var(--safe-top));
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 32px);
+  padding: 10px 16px;
+  border-radius: 99px;
+  font-weight: 800;
+  font-size: 14px;
+  white-space: nowrap;
+  color: #1d1606;
+  background: linear-gradient(180deg, #fff1a8, #f5c542);
+  box-shadow: 0 12px 30px -8px rgb(245 197 66 / 0.6);
+}
+.laugh-caption span {
+  font-size: 22px;
+}
+.laugh-face {
+  position: absolute;
+  bottom: -40px;
+  filter: drop-shadow(0 6px 8px rgb(0 0 0 / 0.4));
+}
+
+/* ---------- Swipe-down sheets ---------- */
+
+.grabber-zone {
+  position: relative;
+  display: block;
+  margin: -10px -20px 6px;
+  padding: 12px 20px 8px;
+  touch-action: none;
+  cursor: grab;
+}
+.grabber-zone .grabber {
+  margin-bottom: 0;
+}
+.peek-btn {
+  position: absolute;
+  right: 16px;
+  top: 6px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  background: rgb(255 255 255 / 0.06);
+}
+.mini-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: grid;
+  gap: 8px;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 6px 16px calc(14px + var(--safe-bottom));
+  border-radius: 22px 22px 0 0;
+  background: linear-gradient(180deg, #16382c, #0b1f18);
+  border-top: 1px solid rgb(216 181 106 / 0.3);
+  box-shadow: 0 -20px 40px -10px rgb(0 0 0 / 0.8);
+  touch-action: none;
+}
+.mini-head {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 4px 0;
+}
+.mini-head .grabber {
+  margin: 0 auto 4px;
+}
+.mini-head b {
+  font-family: var(--display);
+  font-size: 18px;
+}
+.mini-head small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* ---------- Bigger chips for bigger stakes ---------- */
+
+.chip.c100 {
+  background: #1f1f1f;
+}
+.chip.c500 {
+  background: #6a3fa0;
+}
+.chip.c1000 {
+  background: #2a5d9c;
+  font-size: 12px;
+}
+.chip.c5000 {
+  background: #a12a22;
+  font-size: 12px;
+}
+
+/* "Sits out" as a ribbon, not over the score */
+.out-tag.sit {
+  inset: auto 0 0 0;
+  padding: 3px 0;
+  font-size: 9px;
+  font-family: var(--ui);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  background: rgb(120 20 12 / 0.85);
+  color: #fff;
+}
+
+.laugh-dim {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, rgb(245 197 66 / 0.22), rgb(3 8 6 / 0.55) 70%);
+}
+.laugh-giant {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin: -0.5em 0 0 -0.5em;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+  text-align: center;
+  font-size: min(78vw, 60vh);
+  filter: drop-shadow(0 20px 40px rgb(0 0 0 / 0.5));
+  will-change: transform;
+}
+.laugh-caption {
+  z-index: 2;
+}
+
+/* Always draw emoji in full colour (some systems fall back to a black-and-white symbol font). */
+.laugh-giant,
+.laugh-face,
+.laugh-caption span {
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Twemoji Mozilla', sans-serif;
+  font-style: normal;
+}

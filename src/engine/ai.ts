@@ -1,7 +1,7 @@
 import type { Card, Rng } from './cards.ts';
 import { handValue } from './hands.ts';
 import { bestPartition, percentile } from './partition.ts';
-import type { Arrangement, Match } from './match.ts';
+import { RULES, type Arrangement, type Match } from './match.ts';
 import TABLES from './ai-tables.json' with { type: 'json' };
 
 const tables = TABLES as unknown as Record<string, number[][]>;
@@ -40,7 +40,7 @@ export function aiCallsCrash(arr: Arrangement, activeCount: number, rng: Rng, fr
   return all > 0.5 || (all > 0.22 && rng() < 0.35);
 }
 
-const round25 = (x: number) => Math.round(x / 25) * 25;
+const roundBet = (x: number) => Math.round(x / 50) * 50;
 
 /**
  * Chooses a bet for one hand. `row` holds the bets already placed this hand
@@ -51,17 +51,19 @@ export function aiBet(m: Match, seat: number, hand: Card[], row: readonly (numbe
   const opponents = d.active.length - 1;
   const win = beatAllChance(d.handCount, d.position, handValue(hand), opponents);
   const tokens = m.players[seat].tokens;
-  const scale = tokens > 2500 ? 2 : tokens > 0 ? 1 : 0.5;
+  const unit = RULES.minBet;
+  const scale = tokens > RULES.startTokens * 2.5 ? 2 : tokens > 0 ? 1 : 0.5;
   const r = rng();
 
+  // Always at least the table minimum (the engine enforces it); more when the hand looks good.
   let bet: number;
-  if (win > 0.8) bet = 25 * (6 + r * 8);
-  else if (win > 0.55) bet = 25 * (2 + r * 4);
-  else if (win > 0.35) bet = r < 0.6 ? 25 * (1 + r * 2) : 0;
-  else bet = r < 0.07 ? 50 : 0; // the odd bluff
+  if (win > 0.8) bet = unit * (6 + r * 8);
+  else if (win > 0.55) bet = unit * (2 + r * 4);
+  else if (win > 0.35) bet = r < 0.6 ? unit * (1 + r * 2) : unit;
+  else bet = r < 0.07 ? unit * 3 : unit; // the odd bluff
 
   const biggest = Math.max(0, ...row.map((b, s) => (s === seat ? 0 : (b ?? 0))));
-  if (biggest >= 200 && win < 0.5) bet = 0; // back off from a big bet with a weak hand
-  if (d.crash[seat]) bet = Math.max(bet, 50);
-  return round25(bet * scale);
+  if (biggest >= unit * 8 && win < 0.5) bet = unit; // don't chase a big bet with a weak hand
+  if (d.crash[seat]) bet = Math.max(bet, RULES.crashMinBet);
+  return roundBet(bet * scale);
 }

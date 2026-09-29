@@ -30,54 +30,96 @@ const overflow = await page.evaluate(() => document.documentElement.scrollWidth 
 
 let deals = 0;
 let crashSeen = false;
-for (; deals < 3; deals++) {
-  if (deals > 0) {
-    await page.getByRole('button', { name: 'Auto' }).click();
-    await wait(400);
+let laughSeen = false;
+let swiped = false;
+let shotBet = false;
+let shotReveal = false;
+const visible = (loc) => loc.isVisible().catch(() => false);
+const tap = (loc) => loc.click({ timeout: 2500 }).then(() => true, () => false);
+const end = Date.now() + 240_000;
+// React to whatever the table shows until three deals have finished.
+while (deals < 3 && Date.now() < end) {
+  if (await visible(page.locator('.laugh'))) {
+    if (!laughSeen) await snap('6-laugh');
+    laughSeen = true;
   }
-  const crashBtn = page.getByRole('button', { name: 'Crash', exact: true });
-  if (deals === 1 && (await crashBtn.isEnabled())) {
-    await crashBtn.click();
-    crashSeen = true;
-  }
-  await page.getByRole('button', { name: 'Lock in' }).click();
-  await wait(900);
-  if (deals === 0) await snap('4-betting');
-  for (let h = 0; h < 5; h++) {
-    const bet = page.getByRole('button', { name: /^Bet \d/ });
-    if (await bet.isVisible().catch(() => false)) {
-      await page.getByRole('button', { name: 'Add 50' }).click();
-      if (deals === 0 && h === 0) await snap('4b-bet-dock');
-      await bet.click();
+  for (const [sel, name] of [
+    ['.takeover', 'crash'],
+    ['.celebrate-screen', 'party'],
+  ]) {
+    if (await visible(page.locator(sel))) {
+      await wait(900);
+      await snap(`6-${name}-${deals}`);
+      await tap(page.locator(sel));
+      await wait(500);
+      if (await visible(page.locator('.laugh'))) {
+        if (!laughSeen) for (const t of [0, 1, 2]) {
+          await snap(`6-laugh-${t}`);
+          await wait(350);
+        }
+        laughSeen = true;
+      }
     }
+  }
+  const lock = page.getByRole('button', { name: 'Lock in' });
+  if (await visible(lock)) {
+    await tap(page.getByRole('button', { name: 'Auto' }));
+    await wait(400);
+    const crashBtn = page.getByRole('button', { name: 'Crash', exact: true });
+    if (deals === 1 && (await crashBtn.isEnabled().catch(() => false))) {
+      await tap(crashBtn);
+      crashSeen = true;
+    }
+    await tap(lock);
+    await wait(900);
+    continue;
+  }
+  const bet = page.getByRole('button', { name: /^Bet \d/ });
+  if (await visible(bet)) {
+    const bigCrash = page.getByRole('button', { name: /^Call Crash and bet/ });
+    if (deals >= 1 && !crashSeen && (await visible(bigCrash))) {
+      await tap(bigCrash);
+      crashSeen = true;
+      await wait(700);
+      await snap('5b-crash-alert');
+      await wait(1500);
+      continue;
+    }
+    await tap(page.getByRole('button', { name: 'Add 100', exact: true }));
+    if (!shotBet) await snap('4b-bet-dock');
+    shotBet = true;
+    await tap(bet);
     await wait(1900);
-    if (deals === 0 && h === 0) await snap('5-reveal');
-    const next = page.getByRole('button', { name: /Play hand|Finish deal/ });
-    const label = await next.textContent();
-    await next.click();
-    if (/Finish/.test(label)) break;
-    await wait(500);
+    if (!shotReveal) await snap('5-reveal');
+    shotReveal = true;
+    continue;
   }
-  await wait(900);
-  const takeover = page.locator('.takeover');
-  if (await takeover.isVisible().catch(() => false)) {
-    await wait(900);
-    await snap(`6-crash-${deals}`);
-    await takeover.click();
-    await wait(600);
+  const again = page.locator('.summary').getByRole('button', { name: /Deal again|New game/ });
+  if (await visible(again)) {
+    await snap(`7-summary-${deals}`);
+    if (!swiped) {
+      // Swipe the summary down to see the table, then bring it back.
+      const box = await page.locator('.summary .grabber-zone').boundingBox();
+      await page.mouse.move(box.x + 40, box.y + 10);
+      await page.mouse.down();
+      await page.mouse.move(box.x + 40, box.y + 260, { steps: 12 });
+      await page.mouse.up();
+      await page.locator('.mini-sheet').waitFor({ timeout: 3000 });
+      await wait(500);
+      await snap('7b-swiped-down');
+      await tap(page.locator('.mini-head'));
+      await page.locator('.summary').waitFor({ timeout: 3000 });
+      swiped = true;
+    }
+    deals++;
+    if (/New game/.test(await again.textContent())) break;
+    await tap(again);
+    await wait(1000);
+    continue;
   }
-  const party = page.locator('.celebrate-screen');
-  if (await party.isVisible().catch(() => false)) {
-    await wait(900);
-    await snap(`6-party-${deals}`);
-    await party.click({ timeout: 2000 }).catch(() => {}); // it also closes itself
-    await wait(600);
-  }
-  await snap(`7-summary-${deals}`);
-  const again = page.getByRole('button', { name: 'Deal again' });
-  if (!(await again.isVisible().catch(() => false))) break;
-  await again.click();
-  await wait(1000);
+  const next = page.getByRole('button', { name: /Play hand|Finish deal/ });
+  if (await visible(next)) await tap(next);
+  await wait(300);
 }
 
 await page.reload();
@@ -87,5 +129,5 @@ await wait(800);
 const offlineOk = await page.locator('.wordmark').isVisible();
 await snap('8-home-offline');
 const resume = await page.getByRole('button', { name: 'Resume game' }).isVisible();
-console.log(JSON.stringify({ deals, crashSeen, horizontalOverflow: overflow, offlineOk, resume, errors }, null, 2));
+console.log(JSON.stringify({ deals, crashSeen, laughSeen, swiped, horizontalOverflow: overflow, offlineOk, resume, errors }, null, 2));
 await browser.close();

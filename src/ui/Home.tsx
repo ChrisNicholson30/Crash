@@ -109,6 +109,15 @@ export function Home({ user, unread, onOnline, canResume, onResume, onStart, onR
           <li>
             <b>3</b> sets wins the game
           </li>
+          <li>
+            <b>10k</b> tokens each
+          </li>
+          <li>
+            <b>100k</b> set pot for a Crash
+          </li>
+          <li>
+            <b>½</b> your tokens if a Crash fails
+          </li>
         </ul>
         <button type="button" className="btn gold big" onClick={start}>
           Play the computer

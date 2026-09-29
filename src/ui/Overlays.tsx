@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { motion } from 'motion/react';
+import { useEffect, useState } from 'react';
+import { motion, useDragControls } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { RULES, type Match } from '../engine/match.ts';
 import type { ReactNode } from 'react';
@@ -89,14 +89,26 @@ export function CrashTakeover({ m, me, onDone }: { m: Match; me: number; onDone:
               <h3>
                 {r.player === me ? 'You' : who.name} {r.success ? 'crashed the table!' : 'called Crash… and missed.'}
               </h3>
-              <p>
-                {r.success
-                  ? `Won every hand. Every opponent pays double their bets — total `
-                  : `Lost a hand: out for the rest of this leg, and each opponent is paid double the bets — total `}
-                <b>
-                  <Coin size={14} /> {total.toLocaleString('en-GB')}
-                </b>
-              </p>
+              {r.success ? (
+                <p>
+                  Won every hand. The set pot{' '}
+                  <b>
+                    <Coin size={14} /> {r.setPot.toLocaleString('en-GB')}
+                  </b>{' '}
+                  plus double bets from everyone:{' '}
+                  <b>
+                    <Coin size={14} /> {total.toLocaleString('en-GB')}
+                  </b>
+                </p>
+              ) : (
+                <p>
+                  Lost a hand. Half {r.player === me ? 'your' : 'their'} tokens gone —{' '}
+                  <b>
+                    <Coin size={14} /> {total.toLocaleString('en-GB')}
+                  </b>{' '}
+                  shared out — and {r.player === me ? 'you sit' : 'they sit'} out the rest of the leg. 😂
+                </p>
+              )}
             </div>
           );
         })}
@@ -122,6 +134,8 @@ export function DealSummary({
   nextLabel?: string;
   gameOverAction?: ReactNode;
 }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const dragControls = useDragControls();
   const o = m.outcome!;
   const d = m.deal;
   const over = m.phase === 'gameOver';
@@ -151,6 +165,41 @@ export function DealSummary({
           ? `First to ${RULES.legsPerSet} legs takes the set.`
           : `First to ${RULES.pointsPerLeg} points wins the leg.`;
 
+  const action = over ? (
+    (gameOverAction ?? (
+      <button type="button" className="btn gold wide" onClick={onHome}>
+        New game
+      </button>
+    ))
+  ) : (
+    <button type="button" className="btn gold wide" onClick={onNext}>
+      {nextLabel ?? 'Deal again'}
+    </button>
+  );
+
+  // Swiped down: a slim bar, so the table behind stays visible.
+  if (collapsed) {
+    return (
+      <motion.div
+        className="mini-sheet"
+        initial={{ y: 80, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 80, opacity: 0 }}
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0.5, bottom: 0.1 }}
+        onDragEnd={(_, info) => info.offset.y < -40 && setCollapsed(false)}
+      >
+        <button type="button" className="mini-head" onClick={() => setCollapsed(false)} aria-label="Show the deal summary">
+          <span className="grabber" />
+          <b>{headline}</b>
+          <small>Tap or swipe up for the scores</small>
+        </button>
+        {action}
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div className="sheet-wrap" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <motion.section
@@ -159,8 +208,19 @@ export function DealSummary({
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
         transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+        drag="y"
+        dragListener={false}
+        dragControls={dragControls}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.7 }}
+        onDragEnd={(_, info) => (info.offset.y > 90 || info.velocity.y > 500) && setCollapsed(true)}
       >
-        <span className="grabber" />
+        <span className="grabber-zone" onPointerDown={(e) => dragControls.start(e)} title="Swipe down to see the table">
+          <span className="grabber" />
+          <button type="button" className="peek-btn" onClick={() => setCollapsed(true)}>
+            See table
+          </button>
+        </span>
         <motion.h2 initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.15 }}>
           {headline}
         </motion.h2>
@@ -182,7 +242,7 @@ export function DealSummary({
               return (
                 <motion.tr
                   key={s}
-                  className={`${p.isHuman ? 'me' : ''}${p.out ? ' out' : ''}${s === big ? ' champ' : ''}`}
+                  className={`${s === me ? 'me' : ''}${p.out ? ' out' : ''}${s === big ? ' champ' : ''}`}
                   initial={{ opacity: 0, x: -16 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.2 + s * 0.07 }}
@@ -211,17 +271,7 @@ export function DealSummary({
           <Tokens value={m.players[me].tokens} size={18} />
         </div>
 
-        {over ? (
-          (gameOverAction ?? (
-            <button type="button" className="btn gold wide" onClick={onHome}>
-              New game
-            </button>
-          ))
-        ) : (
-          <button type="button" className="btn gold wide" onClick={onNext}>
-            {nextLabel ?? 'Deal again'}
-          </button>
-        )}
+        {action}
       </motion.section>
     </motion.div>
   );

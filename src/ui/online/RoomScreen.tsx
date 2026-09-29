@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useDragControls } from 'motion/react';
 import { api, useRoom, type Friend, type User } from '../../net/api.ts';
 import type { ChatLine } from '../../net/protocol.ts';
 import { Game } from '../Game.tsx';
@@ -276,6 +276,7 @@ function Lobby({
 
 function ChatSheet({ lines, me, onSend, onClose }: { lines: ChatLine[]; me: string; onSend: (t: string) => void; onClose: () => void }) {
   const [text, setText] = useState('');
+  const dragControls = useDragControls();
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [lines.length]);
   const quick = ['Nice hand!', 'CRASH incoming 😤', 'Gg', 'No way!', '🔥'];
@@ -293,10 +294,18 @@ function ChatSheet({ lines, me, onSend, onClose }: { lines: ChatLine[]; me: stri
         exit={{ y: '100%' }}
         transition={{ type: 'spring', stiffness: 280, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
+        drag="y"
+        dragListener={false}
+        dragControls={dragControls}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.7 }}
+        onDragEnd={(_, info) => (info.offset.y > 100 || info.velocity.y > 500) && onClose()}
         role="dialog"
         aria-label="Table chat"
       >
-        <span className="grabber" />
+        <span className="grabber-zone" onPointerDown={(e) => dragControls.start(e)} aria-hidden="true">
+          <span className="grabber" />
+        </span>
         <h2>Table chat</h2>
         <div className="thread">
           {lines.length === 0 && <p className="muted center">Say something to the table.</p>}

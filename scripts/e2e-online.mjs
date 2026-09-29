@@ -75,7 +75,7 @@ while (Date.now() < end && lockIns < 6) {
     if (await visible(p.getByText(/^Waiting for/).first())) sawWaiting = true;
     const bet = p.getByRole('button', { name: /^Bet \d/ });
     if (await visible(bet)) {
-      await tap(p.getByRole('button', { name: 'Add 25', exact: true }));
+      await tap(p.getByRole('button', { name: 'Add 100', exact: true }));
       if (n === 'A' && summaries === 0) await snap(p, '5-betting');
       await tap(p.getByRole('button', { name: /^Bet \d/ }));
       continue;

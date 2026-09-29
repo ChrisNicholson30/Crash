@@ -1,4 +1,4 @@
-import { motion } from 'motion/react';
+import { motion, useDragControls } from 'motion/react';
 import type { Card, Suit } from '../engine/cards.ts';
 import { CATEGORY_BLURB, CATEGORY_NAME, Category } from '../engine/hands.ts';
 import { RULES } from '../engine/match.ts';
@@ -13,6 +13,7 @@ const EXAMPLES: [Category, Card[]][] = [
 ];
 
 export function RulesSheet({ onClose }: { onClose: () => void }) {
+  const dragControls = useDragControls();
   return (
     <motion.div className="sheet-wrap" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.section
@@ -22,10 +23,18 @@ export function RulesSheet({ onClose }: { onClose: () => void }) {
         exit={{ y: '100%' }}
         transition={{ type: 'spring', stiffness: 260, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
+        drag="y"
+        dragListener={false}
+        dragControls={dragControls}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.7 }}
+        onDragEnd={(_, info) => (info.offset.y > 100 || info.velocity.y > 500) && onClose()}
         role="dialog"
         aria-label="How to play"
       >
-        <span className="grabber" />
+        <span className="grabber-zone" onPointerDown={(e) => dragControls.start(e)} aria-hidden="true">
+          <span className="grabber" />
+        </span>
         <h2>How to play Crash</h2>
 
         <h3>1 · Build your hands</h3>
@@ -63,16 +72,17 @@ export function RulesSheet({ onClose }: { onClose: () => void }) {
         <h3>3 · Bet Barney tokens</h3>
         <p>
           Everyone starts with {RULES.startTokens.toLocaleString('en-GB')} tokens. Before each hand turns over, players bet in
-          turn into the pot; the best hand among those who bet takes it all. You can bet on credit down to{' '}
+          turn into the pot (at least {RULES.minBet} a hand); the best hand takes it all. You can bet on credit down to{' '}
           {(-RULES.debtLimit).toLocaleString('en-GB')} — hit that and you’re out.
         </p>
 
         <h3>4 · Call the Crash</h3>
         <p>
-          Call <b>Crash</b> when you lock in, or before any later hand turns over while you haven’t lost a hand yet: a promise to
-          win every hand of the deal against everyone. Everyone is told the moment it’s called. Pull it off and each opponent pays
-          you double their bets for the deal. Miss once and you pay each of them double yours — and you sit out the rest of the
-          leg. Crash callers must bet at least {RULES.crashMinBet} on every hand.
+          Every hand you either <b>bet</b> or <b>Crash</b>. Crash is a promise to win every hand of the deal against everyone —
+          call it when you lock in, or on any later hand while you’re still unbeaten, and the whole table is told. Pull it off
+          and you win the <b>set pot</b> ({RULES.setPot.toLocaleString('en-GB')}) plus double everyone’s bets. Miss once and you
+          lose <b>half your tokens</b> to the others and sit out the rest of the leg — so be smart. Crash bets are at least{' '}
+          {RULES.crashMinBet}.
         </p>
 
         <h3>5 · Legs, sets, game</h3>
