@@ -7,6 +7,7 @@ import {
   currentBettor,
   newMatchWith,
   placeBetFor,
+  resumeMatch,
   submitArrangement,
   type Match,
 } from '../src/engine/match.ts';
@@ -44,6 +45,14 @@ export class GameRoom extends DurableObject<Env> {
     super(ctx, env);
     ctx.blockConcurrencyWhile(async () => {
       this.room = (await ctx.storage.get<RoomState>('room')) ?? null;
+      if (this.room?.match) {
+        const resumed = resumeMatch(this.room.match);
+        if (resumed !== this.room.match) {
+          this.room.match = resumed;
+          this.room.ready = [];
+          await this.afterChange();
+        }
+      }
     });
   }
 

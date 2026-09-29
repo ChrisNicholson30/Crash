@@ -13,7 +13,7 @@ import { RULES } from '../engine/match.ts';
 export interface GameActions {
   lock: (arr: Arrangement, crash: boolean) => void;
   bet: (amount: number) => void;
-  /** Call Crash mid-deal and bet `amount` on the current hand. */
+  /** Call Crash at the opening and lock the stake for the deal. */
   crash: (amount: number) => void;
   next: () => void;
   home: () => void;

@@ -27,14 +27,13 @@ export function aiArrange(cards: readonly Card[], handCount: number): Arrangemen
 }
 
 /**
- * Calls Crash only when the hands still to play (from `from` on) look very
- * likely to beat everyone.
+ * Calls Crash at the opening only when all hands look very likely to beat everyone.
  */
-export function aiCallsCrash(arr: Arrangement, activeCount: number, rng: Rng, from = 0): boolean {
+export function aiCallsCrash(arr: Arrangement, activeCount: number, rng: Rng): boolean {
   if (arr.hands.some((h) => h === null)) return false;
   const opponents = activeCount - 1;
   const all = arr.hands.reduce(
-    (p, h, pos) => (pos < from ? p : p * beatAllChance(arr.hands.length, pos, handValue(h), opponents)),
+    (p, h, pos) => p * beatAllChance(arr.hands.length, pos, handValue(h), opponents),
     1,
   );
   return all > 0.5 || (all > 0.22 && rng() < 0.35);

@@ -22,6 +22,7 @@ import {
   newMatch,
   orderHands,
   placeBet,
+  resumeMatch,
   tableLayout,
   validateArrangement,
   type Match,
@@ -215,7 +216,7 @@ describe('a deal', () => {
     m = { ...m, players: m.players.map((p, s) => (s === HUMAN ? { ...p, tokens: -3000 } : p)) };
     expect(maxBet(m, HUMAN)).toBe(2000);
     m = lockIn(m, aiArrange(m.deal.dealt[HUMAN], 4), true, mulberry32(2));
-    m = playOut(m, 500); // loses the pots: -5000
+    m = playOut(m, 2000); // loses the opening pot: -5000; later stakes are capped at zero
     expect(m.players[HUMAN].tokens).toBe(-RULES.debtLimit);
     expect(m.players[HUMAN].out).toBe(true);
     expect(m.phase).toBe('gameOver');
@@ -226,8 +227,9 @@ describe('a deal', () => {
     let m = rig(newMatch(4, 'Chris', mulberry32(8)), dealt);
     const arr = { hands: [h('AS AH AD'), h('2C 3D 4S'), h('5H 7H 9H'), null], spares: h('8C JC QC 6S') };
     m = lockIn(m, arr, false, mulberry32(2));
-    for (let i = 0; i < 3; i++) m = advance(placeBet(m, 0, mulberry32(i)), mulberry32(i));
-    // Nothing to bet on, so the declined hand checks automatically and turns straight over.
+    m = placeBet(m, 0, mulberry32(0));
+    for (let i = 0; i < 3; i++) m = advance(m, mulberry32(i));
+    // The opening stake is carried forward, but the declined hand checks automatically.
     expect(m.phase).toBe('reveal');
     expect(m.deal.position).toBe(3);
     expect(maxBet(m, HUMAN)).toBeGreaterThan(0);
@@ -238,31 +240,85 @@ describe('a deal', () => {
   });
 });
 
-describe('Crash mid-game', () => {
+describe('opening decisions', () => {
   const monster = h('AS AH AD KS KH KD QS QH QD JS JH JD 2C');
   const weak = h('2H 5H 7H 3C 6C 8C 2D 4D 9D 3S 5S 7S 10H');
 
-  it('can be called before a later hand while unbeaten, and pays out if every hand is won', () => {
+  it('can be called on the opening turn, and pays out if every hand is won', () => {
     let m = rig(newMatch(4, 'Chris', mulberry32(1)), monster);
     m = lockIn(m, aiArrange(m.deal.dealt[HUMAN], 4), false, mulberry32(2));
-    m = advance(placeBet(m, 25, mulberry32(3)), mulberry32(3));
     expect(canCallCrash(m, HUMAN)).toBe(true);
     m = callCrash(m, HUMAN);
-    expect(m.deal.crashFrom[HUMAN]).toBe(1);
+    expect(m.deal.crashFrom[HUMAN]).toBe(0);
     expect(minBet(m, HUMAN)).toBe(RULES.crashMinBet);
     m = playOut(m, 0);
     expect(m.deal.crashResults[0]).toMatchObject({ player: HUMAN, success: true });
   });
 
-  it("can't be called once you've lost a hand", () => {
-    let m = rig(newMatch(4, 'Chris', mulberry32(4)), weak);
-    m = lockIn(m, aiArrange(m.deal.dealt[HUMAN], 4), false, mulberry32(2));
-    m = placeBet(m, 0, mulberry32(3));
-    if (m.deal.results[0].points[HUMAN] < 3) {
-      m = advance(m, mulberry32(3));
+  it.each([3, 4] as const)('locks bets and Crash through every reveal at a %i-player table, even while unbeaten', (count) => {
+    const cards = count === 4 ? monster : h('AS AH AD KS KH KD QS QH QD JS JH JD 10S 10H 10D 2C 3C');
+    let m = rig(newMatch(count, 'Chris', mulberry32(1)), cards);
+    m = lockIn(m, aiArrange(m.deal.dealt[HUMAN], m.deal.handCount), false, mulberry32(2));
+    m = placeBet(m, 700, mulberry32(3));
+    const calls = m.deal.crash.slice();
+    const balances = [];
+    for (let pos = 0; pos < m.deal.handCount; pos++) {
+      expect(m.phase).toBe('reveal');
+      expect(m.deal.position).toBe(pos);
+      expect(m.deal.results[pos].points[HUMAN]).toBe(count - 1);
+      expect(m.deal.results[pos].bets[HUMAN]).toBe(700);
+      expect(m.deal.crash).toEqual(calls);
+      expect(currentBettor(m)).toBeNull();
       expect(canCallCrash(m, HUMAN)).toBe(false);
       expect(() => callCrash(m, HUMAN)).toThrow();
+      expect(() => placeBet(m, 1000)).toThrow(/beginning/);
+      balances.push(totalTokens(m));
+      if (pos + 1 < m.deal.handCount) m = advance(m, mulberry32(3));
     }
+    expect(new Set(balances).size).toBe(1);
+  });
+
+  it('rejects forged later betting phases and resumes older saved games without taking another bet', () => {
+    let m = rig(newMatch(4, 'Chris', mulberry32(1)), monster);
+    m = lockIn(m, aiArrange(m.deal.dealt[HUMAN], 4), false, mulberry32(2));
+    expect(resumeMatch(m)).toBe(m);
+    m = placeBet(m, 700, mulberry32(3));
+    const legacy: Match = { ...m, phase: 'betting', deal: { ...m.deal, position: 1 } };
+    expect(currentBettor(legacy)).toBeNull();
+    expect(canCallCrash(legacy, HUMAN)).toBe(false);
+    expect(() => placeBet(legacy, 1000)).toThrow(/beginning/);
+    expect(() => callCrash(legacy, HUMAN)).toThrow();
+    const resumed = resumeMatch(legacy);
+    expect(resumed).toEqual(advance(m));
+    expect(resumeMatch(resumed)).toBe(resumed);
+  });
+
+  it('caps the carried stake at remaining credit and skips hands after credit runs out', () => {
+    let m = rig(newMatch(4, 'Chris', mulberry32(4)), weak);
+    m = { ...m, players: m.players.map((p, seat) => seat === HUMAN ? { ...p, tokens: -4250 } : p) };
+    m = lockIn(m, aiArrange(m.deal.dealt[HUMAN], 4), false, mulberry32(2));
+    m = playOut(m, 500);
+    expect(m.deal.results.map((r) => r.bets[HUMAN])).toEqual([500, 250, 0, 0]);
+    expect(m.players[HUMAN].tokens).toBe(-RULES.debtLimit);
+    expect(m.players[HUMAN].out).toBe(true);
+  });
+
+  it('opens betting and Crash choices again for the next deal', () => {
+    const rng = mulberry32(2);
+    let m = rig(newMatch(4, 'Chris', mulberry32(1)), monster);
+    m = lockIn(m, aiArrange(m.deal.dealt[HUMAN], 4), false, rng);
+    m = playOut(m, 100, rng);
+    expect(m.outcome?.legWinner).toBe(HUMAN);
+    m = advance(m, rng);
+    expect(m.phase).toBe('arrange');
+    m = rig(m, monster);
+    m = lockIn(m, aiArrange(m.deal.dealt[HUMAN], 4), false, rng);
+    expect(m.phase).toBe('betting');
+    expect(m.deal.position).toBe(0);
+    expect(m.deal.results).toHaveLength(0);
+    expect(canCallCrash(m, HUMAN)).toBe(true);
+    m = placeBet(callCrash(m, HUMAN), 900, rng);
+    expect(m.deal.results[0].bets[HUMAN]).toBe(900);
   });
 
   it('a missed Crash sits you out for the rest of the leg', () => {
@@ -307,6 +363,33 @@ describe('several people at one table', () => {
       expect(m.players[turn].isHuman).toBe(true);
       const other = turn === 0 ? 1 : 0;
       expect(() => placeBetFor(m, other, 25, rng)).toThrow(/turn/);
+    }
+  });
+
+  it('rejects out-of-turn and duplicate opening actions, then closes betting for all people', () => {
+    const rng = mulberry32(21);
+    const monster = h('AS AH AD KS KH KD QS QH QD JS JH JD 2C');
+    let m = rig(newMatchWith(seats, rng), monster);
+    m = { ...m, deal: { ...m.deal, betOrder: [1, 0, 2, 3] } };
+    for (const seat of [0, 1]) m = submitArrangement(m, seat, aiArrange(m.deal.dealt[seat], 4), false, rng);
+    expect(currentBettor(m)).toBe(1);
+    expect(canCallCrash(m, 0)).toBe(false);
+    expect(() => callCrash(m, 0)).toThrow();
+    expect(() => placeBetFor(m, 0, 500, rng)).toThrow(/turn/);
+    m = placeBetFor(m, 1, 300, rng);
+    expect(currentBettor(m)).toBe(0);
+    expect(canCallCrash(m, 0)).toBe(true);
+    m = callCrash(m, 0);
+    expect(() => callCrash(m, 0)).toThrow();
+    m = placeBetFor(m, 0, 800, rng);
+    expect(() => placeBetFor(m, 0, 900, rng)).toThrow(/beginning/);
+    for (let pos = 0; pos < m.deal.handCount; pos++) {
+      expect(m.phase).toBe('reveal');
+      for (const seat of [0, 1]) {
+        expect(canCallCrash(m, seat)).toBe(false);
+        expect(() => placeBetFor(m, seat, 500, rng)).toThrow(/beginning/);
+      }
+      if (pos + 1 < m.deal.handCount) m = advance(m, rng);
     }
   });
 

@@ -110,6 +110,7 @@ assert(A.last?.match && B.last?.match, 'match started');
 
 const seatsOf = (s: Seat) => s.last!.me!;
 let checkedPrivacy = false;
+let checkedOpeningOnly = false;
 const deadline = Date.now() + 90_000;
 while (Date.now() < deadline) {
   for (const s of [A, B]) {
@@ -119,10 +120,24 @@ while (Date.now() < deadline) {
     // Privacy: never another seat's dealt cards, never unrevealed opponent hands.
     m.deal.dealt.forEach((cards, seat) => assert(seat === me || cards.length === 0, `${s.c.name} received seat ${seat}'s cards`));
     if (m.phase === 'betting') {
+      assert(m.deal.position === 0 && m.deal.results.length === 0, 'online betting only opens before hand 1');
       m.deal.arrangements.forEach((a, seat) => {
         if (seat !== me && a) a.hands.slice(m.deal.results.length).forEach((h) => assert(!h || h[0].rank === 0, `${s.c.name} can see an unrevealed hand of seat ${seat}`));
       });
       checkedPrivacy = true;
+    }
+    if (m.phase === 'reveal' && !checkedOpeningOnly) {
+      const before = s.errors.length;
+      s.ws.send(JSON.stringify({ t: 'bet', amount: 1000 }));
+      s.ws.send(JSON.stringify({ t: 'crash' }));
+      const end = Date.now() + 3000;
+      while (s.errors.length < before + 2 && Date.now() < end) await wait(50);
+      const rejected = s.errors.splice(before);
+      assert(rejected.length === 2, 'server rejects both late actions');
+      assert(/beginning/.test(rejected[0]), 'late bet rejected by opening rule');
+      assert(/can't call Crash now/.test(rejected[1]), 'late Crash rejected by opening rule');
+      assert(s.last!.match!.deal.position === m.deal.position && s.last!.match!.phase === 'reveal', 'rejected actions do not advance play');
+      checkedOpeningOnly = true;
     }
     if (m.phase === 'arrange' && m.deal.active.includes(me) && !m.deal.submitted[me]) {
       s.ws.send(JSON.stringify({ t: 'arrange', arrangement: aiArrange(m.deal.dealt[me], m.deal.handCount), crash: false }));
@@ -139,6 +154,7 @@ while (Date.now() < deadline) {
 const final = A.last!.match!;
 assert(final.deal.number > DEALS || final.phase === 'gameOver', `played ${DEALS} deals (got to deal ${final.deal.number}, phase ${final.phase})`);
 assert(checkedPrivacy, 'privacy checked during betting');
+assert(checkedOpeningOnly, 'server checked late bets and Crash calls');
 const total = final.players.reduce((s, p) => s + p.tokens, 0);
 // Tokens only move between players, except a successful Crash, which adds the set pot.
 const potsPaid = RULES.setPot * (final.setNumber - 1) + (RULES.setPot - final.setPot);

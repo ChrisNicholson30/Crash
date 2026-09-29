@@ -25,7 +25,7 @@ const SHORT: Record<string, string> = { Prile: 'Prile', Stiff: 'Stiff', Run: 'Ru
 /**
  * The whole table at once: a row per hand, a column per player. Your hands are
  * face up; everyone else's turn over as each hand is played. The live row is
- * the one being bet on.
+ * the hand currently being played.
  */
 export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline }: Props) {
   const d = m.deal;
@@ -74,11 +74,11 @@ export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline }:
           </h2>
           <p>
             {revealing
-              ? 'Cards up.'
+              ? 'Cards up. Opening bets and Crash calls are locked.'
               : !playing
                 ? 'You’re sitting out this leg — watching.'
                 : turn === me
-                  ? 'Your move: bet, or call Crash.'
+                  ? (canCallCrash(m, me) ? 'Opening move: bet, or call Crash.' : 'Choose your opening stake.')
                   : `Waiting for ${turn !== null ? m.players[turn].name : '…'}.`}
           </p>
         </div>
@@ -248,7 +248,7 @@ function BetDock({ m, me, onBet, onCrash, secs }: { m: Match; me: number; onBet:
     <footer className="dock bet-dock">
       <div className="bet-row">
         <div className="bet-amount">
-          <small>Stake{secs !== null ? ` · ${secs}s` : ''}</small>
+          <small>Stake per hand{secs !== null ? ` · ${secs}s` : ''}</small>
           <motion.b key={amount} initial={{ scale: 1.2 }} animate={{ scale: 1 }}>
             <Coin size={20} /> {amount.toLocaleString('en-GB')}
           </motion.b>
@@ -285,7 +285,7 @@ function BetDock({ m, me, onBet, onCrash, secs }: { m: Match; me: number; onBet:
         )}
         <motion.button type="button" className="btn gold big-bet" onClick={() => onBet(amount)} disabled={amount === 0} whileTap={{ scale: 0.96 }}>
           <span>Bet {amount.toLocaleString('en-GB')}</span>
-          <small>{crashing ? 'you’re on a Crash' : 'best hand takes the pot'}</small>
+          <small>{crashing ? 'you’re on a Crash' : 'locked for this deal'}</small>
         </motion.button>
       </div>
     </footer>

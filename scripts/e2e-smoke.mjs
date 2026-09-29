@@ -2,15 +2,21 @@
 // (manual + auto arranging, betting, Crash), then checks the app loads offline.
 // Usage: node scripts/e2e-smoke.mjs [url] [screenshotDir]
 import { chromium } from 'playwright';
+import assert from 'node:assert/strict';
 
 const url = process.argv[2] ?? 'http://localhost:4173/';
 const shots = process.argv[3];
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true });
+// Solo play does not need the online account API (which preview does not serve).
+await ctx.route('**/api/me', (route) => route.fulfill({ json: { user: null } }));
 const page = await ctx.newPage();
 const errors = [];
+let offline = false;
 page.on('pageerror', (e) => errors.push(e.message));
-page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+page.on('console', (m) => {
+  if (m.type() === 'error' && !(offline && m.text().includes('net::ERR_INTERNET_DISCONNECTED'))) errors.push(m.text());
+});
 const snap = async (name) => shots && page.screenshot({ path: `${shots}/${name}.png` });
 const wait = (ms) => page.waitForTimeout(ms);
 
@@ -76,6 +82,7 @@ while (deals < 3 && Date.now() < end) {
   }
   const bet = page.getByRole('button', { name: /^Bet \d/ });
   if (await visible(bet)) {
+    assert.match(await page.locator('.stage-head h2').textContent(), /^Hand 1\b/, 'betting only opens before hand 1');
     const bigCrash = page.getByRole('button', { name: /^Call Crash and bet/ });
     if (deals >= 1 && !crashSeen && (await visible(bigCrash))) {
       await tap(bigCrash);
@@ -118,11 +125,16 @@ while (deals < 3 && Date.now() < end) {
     continue;
   }
   const next = page.getByRole('button', { name: /Play hand|Finish deal/ });
-  if (await visible(next)) await tap(next);
+  if (await visible(next)) {
+    assert.equal(await visible(bet), false, 'no new bets after a reveal');
+    assert.equal(await visible(page.getByRole('button', { name: /^Call Crash and bet/ })), false, 'no Crash calls after a reveal');
+    await tap(next);
+  }
   await wait(300);
 }
 
 await page.reload();
+offline = true;
 await ctx.setOffline(true);
 await page.reload();
 await wait(800);
@@ -131,3 +143,7 @@ await snap('8-home-offline');
 const resume = await page.getByRole('button', { name: 'Resume game' }).isVisible();
 console.log(JSON.stringify({ deals, crashSeen, laughSeen, swiped, horizontalOverflow: overflow, offlineOk, resume, errors }, null, 2));
 await browser.close();
+assert.ok(deals >= 1, 'at least one deal completed');
+assert.equal(overflow, false, 'phone layout has no horizontal overflow');
+assert.equal(offlineOk, true, 'game loads offline');
+assert.deepEqual(errors, [], 'no browser errors');

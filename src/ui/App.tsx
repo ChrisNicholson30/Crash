@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { HUMAN, advance, callCrash, lockIn, newMatch, placeBet, type Match } from '../engine/match.ts';
+import { HUMAN, advance, callCrash, lockIn, newMatch, placeBet, resumeMatch, type Match } from '../engine/match.ts';
 import { api, type Friend, type User } from '../net/api.ts';
 import { Home } from './Home.tsx';
 import { Game } from './Game.tsx';
@@ -17,7 +17,7 @@ function load(): Match | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const m = raw ? (JSON.parse(raw) as Match) : null;
-    return m?.version === 3 ? m : null;
+    return m?.version === 3 ? resumeMatch(m) : null;
   } catch {
     return null;
   }

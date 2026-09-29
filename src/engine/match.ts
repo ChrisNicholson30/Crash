@@ -9,9 +9,9 @@ export const RULES = {
   startTokens: 10_000,
   /** A player whose balance reaches -debtLimit is out. */
   debtLimit: 5000,
-  /** A player who calls Crash must bet at least this on every hand they play. */
-  /** Every hand you play is bet on: at least this much (or whatever credit is left). */
+  /** The opening stake is used on every playable hand (or whatever credit is left). */
   minBet: 100,
+  /** Minimum opening stake for a player who calls Crash. */
   crashMinBet: 500,
   /** Crash settles at this multiple of the loser's bets for the deal. */
   crashMultiplier: 2,
@@ -83,13 +83,13 @@ export interface DealState {
   /** Human seats that have locked in their hands this deal. */
   submitted: boolean[];
   crash: boolean[];
-  /** Hand number (0-based) at which each seat called Crash, or null. */
+  /** 0 for an opening Crash call, or null. */
   crashFrom: (number | null)[];
   /** The hand currently being bet on / revealed. */
   position: number;
   /** Seats in betting order for this deal (starts left of the dealer). */
   betOrder: number[];
-  /** bets[position][seat]; null = not yet decided. */
+  /** bets[position][seat]; row 0 is chosen at the opening, later rows reuse that stake. */
   bets: (number | null)[][];
   results: PositionResult[];
   crashResults: CrashResult[];
@@ -244,7 +244,7 @@ export function submitArrangement(
   callCrash: boolean,
   rng: Rng = Math.random,
 ): Match {
-  if (m.phase !== 'arrange') throw new Error('Not arranging');
+  if (m.phase !== 'arrange' || m.deal.position !== 0 || m.deal.results.length > 0) throw new Error('Not arranging');
   const d = m.deal;
   if (!d.active.includes(seat) || !m.players[seat].isHuman) throw new Error('Not your seat');
   if (d.submitted[seat]) throw new Error('Hands already locked in');
@@ -278,31 +278,25 @@ function beginIfReady(m: Match, rng: Rng): Match {
     crash[s] = aiCallsCrash(arrangements[s]!, d.active.length, rng);
     if (crash[s]) crashFrom[s] = 0;
   }
-  return openBetting({ ...m, deal: { ...d, arrangements, crash, crashFrom } }, 0, rng);
+  return openBetting({ ...m, deal: { ...d, arrangements, crash, crashFrom } }, rng);
 }
 
-/** Has `seat` won every hand turned over so far this deal? */
-export function unbeatenSoFar(d: DealState, seat: number): boolean {
-  return d.results.every((r) => d.active.every((o) => o === seat || r.values[seat]! > r.values[o]!));
-}
-
-/** Crash can be called before any hand is turned over, while you're still unbeaten and haven't bet on this hand. */
+/** Crash is an opening decision, made on your betting turn before any hand is revealed. */
 export function canCallCrash(m: Match, seat: number): boolean {
   const d = m.deal;
-  if (m.phase !== 'betting' || !d.active.includes(seat) || d.crash[seat]) return false;
-  if (d.bets[d.position][seat] !== null) return false;
-  if (d.arrangements[seat]?.hands.some((h) => h === null)) return false;
-  return unbeatenSoFar(d, seat);
+  if (currentBettor(m) !== seat || !d.active.includes(seat) || d.crash[seat]) return false;
+  const arr = d.arrangements[seat];
+  return !!arr && arr.hands.every((h) => h !== null);
 }
 
-/** Calls Crash mid-deal: from now on the caller must win every remaining hand (and bet on each). */
+/** Calls Crash at the opening: the caller must win every hand in the deal. */
 export function callCrash(m: Match, seat: number): Match {
   if (!canCallCrash(m, seat)) throw new Error("You can't call Crash now");
   const d = m.deal;
   const crash = d.crash.slice();
   const crashFrom = d.crashFrom.slice();
   crash[seat] = true;
-  crashFrom[seat] = d.position;
+  crashFrom[seat] = 0;
   return { ...m, deal: { ...d, crash, crashFrom } };
 }
 
@@ -334,10 +328,10 @@ function clampBet(m: Match, seat: number, amount: number): number {
   return Math.max(minBet(m, seat), Math.min(maxBet(m, seat), Math.floor(amount)));
 }
 
-/** Seat whose turn it is to bet, or null once everyone has. */
+/** Seat whose turn it is to choose an opening stake, or null once betting is closed. */
 export function currentBettor(m: Match): number | null {
-  if (m.phase !== 'betting') return null;
-  const row = m.deal.bets[m.deal.position];
+  if (m.phase !== 'betting' || m.deal.position !== 0 || m.deal.results.length > 0) return null;
+  const row = m.deal.bets[0];
   return m.deal.betOrder.find((s) => row[s] === null) ?? null;
 }
 
@@ -347,7 +341,7 @@ export function currentBettor(m: Match): number | null {
  * person who needs to choose.
  */
 function runAiBets(m: Match, rng: Rng): Match {
-  const d = m.deal; // bets and positions don't change inside the loop; crash calls update m
+  const d = m.deal;
   const row = d.bets[d.position].slice();
   for (const seat of d.betOrder) {
     if (row[seat] !== null) continue;
@@ -356,9 +350,6 @@ function runAiBets(m: Match, rng: Rng): Match {
       continue;
     }
     if (m.players[seat].isHuman) break;
-    if (d.position > 0 && canCallCrash(m, seat) && aiCallsCrash(d.arrangements[seat]!, d.active.length, rng, d.position)) {
-      m = callCrash(m, seat);
-    }
     const hand = d.arrangements[seat]!.hands[d.position]!;
     row[seat] = clampBet(m, seat, aiBet(m, seat, hand, row, rng));
   }
@@ -367,14 +358,16 @@ function runAiBets(m: Match, rng: Rng): Match {
   return { ...m, deal: { ...m.deal, bets } };
 }
 
-function openBetting(m: Match, position: number, rng: Rng): Match {
-  const next = runAiBets({ ...m, phase: 'betting', deal: { ...m.deal, position } }, rng);
-  return next.deal.bets[position].some((b, s) => b === null && next.deal.active.includes(s)) ? next : resolvePosition(next);
+function openBetting(m: Match, rng: Rng): Match {
+  const next = runAiBets({ ...m, phase: 'betting' }, rng);
+  return currentBettor(next) !== null ? next : resolvePosition(next);
 }
 
-/** A person's bet on the current hand; later computer players then bet, and the hand turns over once all are in. */
+/** Choose a stake once, before hand 1; later hands use it automatically. */
 export function placeBetFor(m: Match, seat: number, amount: number, rng: Rng = Math.random): Match {
-  if (m.phase !== 'betting') throw new Error('Not betting');
+  if (m.phase !== 'betting' || m.deal.position !== 0 || m.deal.results.length > 0) {
+    throw new Error('Betting is only allowed at the beginning of the deal');
+  }
   if (currentBettor(m) !== seat) throw new Error('Not your turn to bet');
   const d = m.deal;
   const amt = clampBet(m, seat, amount);
@@ -451,12 +444,32 @@ function resolvePosition(m: Match): Match {
   };
 }
 
+/** Reveal a later hand using the stakes already chosen at the opening. */
+function revealWithOpeningBets(m: Match, position: number): Match {
+  const next = { ...m, deal: { ...m.deal, position } };
+  const bets = m.deal.bets.slice();
+  // No new decision: declined hands check, and the stake never exceeds remaining credit.
+  bets[position] = m.players.map((_, seat) =>
+    m.deal.active.includes(seat) ? clampBet(next, seat, m.deal.bets[0][seat] ?? 0) : 0,
+  );
+  return resolvePosition({ ...next, deal: { ...next.deal, bets } });
+}
+
+/** Old saved games may be waiting for a later-hand bet; resume without reopening betting. */
+export function resumeMatch(m: Match): Match {
+  if (m.phase === 'betting' && m.deal.position > 0) {
+    return revealWithOpeningBets(m, m.deal.position);
+  }
+  return m;
+}
+
 // ---------- end of deal ----------
 
-/** After a reveal: bet on the next hand, or finish the deal. */
+/** After a reveal: play the next hand with the opening stakes, or finish the deal. */
 export function advance(m: Match, rng: Rng = Math.random): Match {
   if (m.phase === 'reveal') {
-    return m.deal.position + 1 < m.deal.handCount ? openBetting(m, m.deal.position + 1, rng) : finishDeal(m);
+    if (m.deal.position + 1 >= m.deal.handCount) return finishDeal(m);
+    return revealWithOpeningBets(m, m.deal.position + 1);
   }
   if (m.phase === 'dealEnd') return startNextDeal(m, rng);
   throw new Error(`Nothing to advance in phase ${m.phase}`);
