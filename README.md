@@ -37,6 +37,14 @@ pnpm icons                   # regenerate PNG icons from public/icon.svg
 
 ## Deploy
 
-This is a static site. Deploy `dist/` to Cloudflare Pages (build command `pnpm build`, output directory `dist`).
+Hosted on Cloudflare Workers as an assets-only Worker (`wrangler.jsonc`, `public/_headers`).
+
+```sh
+pnpm cf:dev      # build and serve through the Workers runtime on :8787
+pnpm cf:check    # build and do a deploy dry run
+pnpm cf:deploy   # build and deploy
+```
+
+For full setup (Git-connected Workers Builds, custom domain, rollback), see [`docs/cloudflare-workers-setup.md`](docs/cloudflare-workers-setup.md).
 
 See `strike-crash-card-game-plan-2026-09-29.md` for the build plan and open decisions.

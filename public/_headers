@@ -1,0 +1,27 @@
+# Cloudflare Workers static assets: custom response headers.
+# Copied into dist/ by Vite; parsed by Cloudflare, never served itself.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+# Hashed filenames: safe to cache for a year.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Service worker and its entry points must always be revalidated, or updates never reach players.
+/sw.js
+  Cache-Control: no-cache
+/registerSW.js
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Content-Type: application/manifest+json
+  Cache-Control: no-cache
+
+# Keep the workers.dev preview URLs out of search results.
+https://:subdomain.workers.dev/*
+  X-Robots-Tag: noindex

@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // Must match the Worker name in the Cloudflare dashboard if you use Workers Builds.
+  "name": "crash",
+  "compatibility_date": "2026-09-29",
+  // Assets-only Worker: no server code. Cloudflare serves the Vite build output directly.
+  "assets": {
+    "directory": "./dist",
+    // Unknown paths return index.html (200) so deep links and PWA launches always load the app.
+    "not_found_handling": "single-page-application"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
