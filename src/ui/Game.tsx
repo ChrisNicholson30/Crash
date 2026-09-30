@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import type { Arrangement, Match } from '../engine/match.ts';
+import { RULES, type Arrangement, type Match } from '../engine/match.ts';
 import { SeatRail } from './SeatRail.tsx';
 import { ArrangeView } from './ArrangeView.tsx';
 import { PlayView } from './PlayView.tsx';
