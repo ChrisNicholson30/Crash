@@ -79,11 +79,9 @@ export function RulesSheet({ onClose }: { onClose: () => void }) {
 
         <h3>4 · Call the Crash</h3>
         <p>
-          At the opening you either <b>bet</b> or <b>Crash</b>. Crash is a promise to win every hand of the deal against everyone —
-          call it when you lock in, or on your opening betting turn before hand 1 is revealed, and the whole table is told.
-          No new bets or Crash calls are allowed after play begins. Pull it off
-          and you win the <b>set pot</b> ({RULES.setPot.toLocaleString('en-GB')}) plus double everyone’s bets. Miss once and you
-          lose <b>half your tokens</b> to the others and sit out the rest of the leg — so be smart. Crash bets are at least{' '}
+          Before anyone’s hand is revealed, choose your stake and either <b>bet</b> or <b>Crash</b>. Crash is a promise to win every hand of the deal against everyone.
+          Win them all and each opponent pays you <b>half your chosen stake</b>. Miss once and you pay <b>half your chosen stake</b>, shared among the opponents,
+          then sit out the rest of the leg. No new bets or Crash calls are allowed after play begins. Crash stakes are at least{' '}
           {RULES.crashMinBet}.
         </p>
 

@@ -280,7 +280,7 @@ function BetDock({ m, me, onBet, onCrash, secs }: { m: Match; me: number; onBet:
             aria-label={`Call Crash and bet ${crashAmount}`}
           >
             <span className="crash-word-sm">CRASH</span>
-            <small>bet {crashAmount} · win every hand</small>
+            <small>stake {crashAmount} · {Math.floor(crashAmount / 2)} at risk</small>
           </motion.button>
         )}
         <motion.button type="button" className="btn gold big-bet" onClick={() => onBet(amount)} disabled={amount === 0} whileTap={{ scale: 0.96 }}>

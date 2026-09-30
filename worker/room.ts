@@ -3,10 +3,10 @@ import {
   actForSeat,
   advance,
   botNames,
-  callCrash,
   currentBettor,
   newMatchWith,
   placeBetFor,
+  placeCrashFor,
   resumeMatch,
   submitArrangement,
   type Match,
@@ -162,13 +162,13 @@ export class GameRoom extends DurableObject<Env> {
     if (seat < 0) throw new Error('You are not seated at this table');
     switch (msg.t) {
       case 'arrange':
-        room.match = submitArrangement(m, seat, msg.arrangement, !!msg.crash);
+        room.match = submitArrangement(m, seat, msg.arrangement, false);
         return;
       case 'bet':
         room.match = placeBetFor(m, seat, Number(msg.amount) || 0);
         return;
       case 'crash':
-        room.match = callCrash(m, seat);
+        room.match = placeCrashFor(m, seat, Number(msg.amount) || 0);
         return;
       case 'next': {
         if (m.phase !== 'reveal' && m.phase !== 'dealEnd') return;

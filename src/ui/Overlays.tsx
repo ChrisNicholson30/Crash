@@ -91,18 +91,14 @@ export function CrashTakeover({ m, me, onDone }: { m: Match; me: number; onDone:
               </h3>
               {r.success ? (
                 <p>
-                  Won every hand. The set pot{' '}
-                  <b>
-                    <Coin size={14} /> {r.setPot.toLocaleString('en-GB')}
-                  </b>{' '}
-                  plus double bets from everyone:{' '}
+                  Won every hand. Each opponent paid half the chosen stake:{' '}
                   <b>
                     <Coin size={14} /> {total.toLocaleString('en-GB')}
                   </b>
                 </p>
               ) : (
                 <p>
-                  Lost a hand. Half {r.player === me ? 'your' : 'their'} tokens gone —{' '}
+                  Lost a hand. Half the chosen stake paid —{' '}
                   <b>
                     <Coin size={14} /> {total.toLocaleString('en-GB')}
                   </b>{' '}

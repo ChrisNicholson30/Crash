@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { HUMAN, advance, callCrash, lockIn, newMatch, placeBet, resumeMatch, type Match } from '../engine/match.ts';
+import { HUMAN, advance, lockIn, newMatch, placeBet, placeCrashFor, resumeMatch, type Match } from '../engine/match.ts';
 import { api, type Friend, type User } from '../net/api.ts';
 import { Home } from './Home.tsx';
 import { Game } from './Game.tsx';
@@ -124,9 +124,9 @@ export function App() {
           m={m}
           me={HUMAN}
           actions={{
-            lock: (arr, crash) => act(() => lockIn(m, arr, crash)),
+            lock: (arr) => act(() => lockIn(m, arr, false)),
             bet: (n) => act(() => placeBet(m, n)),
-            crash: (amount) => act(() => placeBet(callCrash(m, HUMAN), amount)),
+            crash: (amount) => act(() => placeCrashFor(m, HUMAN, amount)),
             next: () => act(() => advance(m)),
             home: () => {
               if (m.phase !== 'gameOver' && !confirm('Leave this game? It will be saved.')) return;

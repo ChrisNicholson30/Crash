@@ -111,12 +111,9 @@ export function RoomScreen({ user, tableId, onLeave }: Props) {
         extra={chatButton}
         subtitle={`Table ${room.id} · Set ${Math.min(match.setNumber, 3)} · Leg ${match.legNumber}`}
         actions={{
-          lock: (arrangement, crash) => send({ t: 'arrange', arrangement, crash }),
+          lock: (arrangement) => send({ t: 'arrange', arrangement }),
           bet: (amount) => send({ t: 'bet', amount }),
-          crash: (amount) => {
-            send({ t: 'crash' });
-            send({ t: 'bet', amount });
-          },
+          crash: (amount) => send({ t: 'crash', amount }),
           next: () => !iAmReady && send({ t: 'next' }),
           home: () => (match.phase === 'gameOver' || confirm('Leave the table? The computer plays for you until you come back.') ? onLeave() : undefined),
         }}
