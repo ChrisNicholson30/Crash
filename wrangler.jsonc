@@ -26,6 +26,19 @@
     "bindings": [{ "name": "TABLES", "class_name": "GameRoom" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }],
+  // Branch previews use separate data and Durable Object storage.
+  "previews": {
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "crash-preview-db",
+        "database_id": "ba4744cc-dde2-4f8f-b4b6-17d81cdcc811"
+      }
+    ],
+    "durable_objects": {
+      "bindings": [{ "name": "TABLES", "class_name": "GameRoom" }]
+    }
+  },
   "observability": {
     "enabled": true
   }
