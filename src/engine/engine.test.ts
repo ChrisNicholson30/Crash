@@ -22,6 +22,7 @@ import {
   newMatch,
   orderHands,
   placeBet,
+  placeCrashFor,
   resumeMatch,
   tableLayout,
   validateArrangement,
@@ -159,37 +160,34 @@ describe('a deal', () => {
     expect(m.points.every((p) => p === 0)).toBe(true);
   });
 
-  it('a successful Crash makes each opponent pay double their bets', () => {
+  it('a successful Crash makes each opponent pay half the caller’s opening stake', () => {
     let m = rig(newMatch(4, 'Chris', mulberry32(1)), monster);
     m = lockIn(m, aiArrange(m.deal.dealt[HUMAN], 4), true, mulberry32(2));
     const before = totalTokens(m);
-    m = playOut(m, 100);
+    m = playOut(m, 1000);
     const crash = m.deal.crashResults.find((c) => c.player === HUMAN)!;
     expect(crash.success).toBe(true);
     for (const t of crash.transfers) {
-      const bets = m.deal.results.reduce((s, r) => s + r.bets[t.from], 0);
       expect(t.to).toBe(HUMAN);
-      expect(t.amount).toBe(RULES.crashMultiplier * bets);
+      expect(t.amount).toBe(500);
     }
-    expect(crash.setPot).toBe(RULES.setPot);
-    expect(m.setPot).toBe(0); // won — refills when the next set starts
-    expect(totalTokens(m)).toBe(before + RULES.setPot); // otherwise tokens only move between players
+    expect(totalTokens(m)).toBe(before);
   });
 
-  it('a failed Crash costs the caller half their tokens, shared among the opponents', () => {
+  it('a failed Crash costs half the chosen stake, shared among the opponents', () => {
     const weak = h('2H 5H 7H 3C 6C 8C 2D 4D 9D 3S 5S 7S 10H');
     let m = rig(newMatch(4, 'Chris', mulberry32(4)), weak);
     m = lockIn(m, aiArrange(m.deal.dealt[HUMAN], 4), true, mulberry32(2));
     let before = 0;
     while (m.phase === 'betting' || m.phase === 'reveal') {
       if (m.phase === 'reveal' && m.deal.position === m.deal.handCount - 1) before = m.players[HUMAN].tokens;
-      m = m.phase === 'betting' ? placeBet(m, 0, mulberry32(5)) : advance(m, mulberry32(5));
+      m = m.phase === 'betting' ? placeBet(m, 1001, mulberry32(5)) : advance(m, mulberry32(5));
     }
     const crash = m.deal.crashResults.find((c) => c.player === HUMAN)!;
     expect(crash.success).toBe(false);
     expect(crash.transfers).toHaveLength(3);
     const paid = crash.transfers.reduce((s, t) => s + t.amount, 0);
-    expect(paid).toBe(Math.floor(before / 2));
+    expect(paid).toBe(500);
     expect(m.players[HUMAN].tokens).toBe(before - paid);
     expect(m.players[HUMAN].sittingOut).toBe(true);
   });
@@ -243,6 +241,16 @@ describe('a deal', () => {
 describe('opening decisions', () => {
   const monster = h('AS AH AD KS KH KD QS QH QD JS JH JD 2C');
   const weak = h('2H 5H 7H 3C 6C 8C 2D 4D 9D 3S 5S 7S 10H');
+
+  it('locks a Crash call and its chosen stake in one opening action', () => {
+    let m = rig(newMatch(4, 'Chris', mulberry32(1)), monster);
+    m = lockIn(m, aiArrange(m.deal.dealt[HUMAN], 4), false, mulberry32(2));
+    m = placeCrashFor(m, HUMAN, 1200, mulberry32(3));
+    expect(m.deal.crash[HUMAN]).toBe(true);
+    expect(m.deal.results[0].bets[HUMAN]).toBe(1200);
+    expect(m.phase).toBe('reveal');
+    expect(() => placeCrashFor(m, HUMAN, 2000)).toThrow();
+  });
 
   it('can be called on the opening turn, and pays out if every hand is won', () => {
     let m = rig(newMatch(4, 'Chris', mulberry32(1)), monster);
@@ -417,7 +425,7 @@ describe('several people at one table', () => {
     while (m.phase !== 'gameOver' && deals < 400) {
       const before = totalTokens(m);
       m = autoPlayDeal(m, rng);
-      expect(totalTokens(m)).toBe(before + m.deal.crashResults.reduce((s, c) => s + c.setPot, 0));
+      expect(totalTokens(m)).toBe(before);
       if (m.phase === 'dealEnd') m = advance(m, rng);
       deals++;
     }
@@ -433,9 +441,7 @@ describe('a whole match', () => {
     let deals = 0;
     while (m.phase !== 'gameOver' && deals < 400) {
       m = autoPlayDeal(m, rng, rng() < 0.05);
-      const potsWon = m.deal.crashResults.reduce((s, c) => s + c.setPot, 0);
-      expect(totalTokens(m)).toBe(start + potsWon);
-      start += potsWon;
+      expect(totalTokens(m)).toBe(start);
       if (m.phase === 'dealEnd') m = advance(m, rng);
       deals++;
     }

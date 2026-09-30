@@ -13,9 +13,9 @@ The three-card hand game for 3 or 4 players, as an installable web app (PWA). Pl
 - **Order:** hands line up strongest first, weakest last. A hand you can't make can be **declined**; a declined hand loses to any real hand.
 - **Play:** hands are played one at a time. Each hand is compared with every opponent's hand in the same position, and each win scores 1 point.
 - **Betting:** everyone starts with 10,000 Barney tokens. At the beginning of each deal, before any hand is revealed, choose a **bet** (at least 100 per playable hand) or **Crash**. That stake is locked and applied automatically to the remaining playable hands; the best hand takes each pot. You can bet on credit down to −5,000; reach that and you're out.
-- **Crash:** when locking in, or on their opening betting turn before hand 1 is revealed, a player can call Crash, predicting they'll win every hand. Everyone is told straight away.
-  - Pull it off and you win the **100,000 set pot** (it refills each set), and each opponent pays double their bets for the deal.
-  - Miss and you lose **half your tokens** to the others, and sit out the rest of the leg.
+- **Crash:** on their opening betting turn, before hand 1 is revealed, a player can choose a stake and call Crash, predicting they'll win every hand. Everyone is told straight away.
+  - Pull it off and each opponent pays you **half your chosen stake**.
+  - Miss and you pay **half your chosen stake**, shared among the opponents, and sit out the rest of the leg.
   - Crash bets are at least 500.
 - **Match:** first to 10 points wins a leg, 3 legs win a set, and 3 sets win the game. Being the last player standing also wins.
 

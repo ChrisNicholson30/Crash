@@ -1,0 +1,10 @@
+{
+  "d1_databases": [
+    {
+      "binding": "PREVIEW_DB",
+      "database_name": "crash-preview-db",
+      "database_id": "ba4744cc-dde2-4f8f-b4b6-17d81cdcc811",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

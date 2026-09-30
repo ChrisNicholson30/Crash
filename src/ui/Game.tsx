@@ -1,17 +1,15 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import type { Arrangement, Match } from '../engine/match.ts';
+import { RULES, type Arrangement, type Match } from '../engine/match.ts';
 import { SeatRail } from './SeatRail.tsx';
 import { ArrangeView } from './ArrangeView.tsx';
 import { PlayView } from './PlayView.tsx';
 import { CrashTakeover, DealSummary } from './Overlays.tsx';
 import { RulesSheet } from './RulesSheet.tsx';
 import { Celebration, LaughBurst } from './Fx.tsx';
-import { Coin } from './Token.tsx';
-import { RULES } from '../engine/match.ts';
 
 export interface GameActions {
-  lock: (arr: Arrangement, crash: boolean) => void;
+  lock: (arr: Arrangement) => void;
   bet: (amount: number) => void;
   /** Call Crash at the opening and lock the stake for the deal. */
   crash: (amount: number) => void;
@@ -63,7 +61,6 @@ export function Game({ m, me, actions, nextLabel, deadline, extra, subtitle, gam
         </header>
 
         <SeatRail m={m} me={me} />
-        <SetPot m={m} />
         <CrashAlerts m={m} me={me} />
 
         <AnimatePresence mode="wait">
@@ -175,19 +172,6 @@ export function useCountdown(deadline?: number | null): number | null {
     return () => clearInterval(t);
   }, [deadline]);
   return deadline ? Math.max(0, Math.ceil((deadline - now) / 1000)) : null;
-}
-
-/** The set pot, waiting for someone brave enough to Crash. */
-function SetPot({ m }: { m: Match }) {
-  const full = m.setPot > 0;
-  return (
-    <motion.div className={`setpot${full ? '' : ' empty'}`} layout initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
-      <Coin size={16} />
-      <span>{full ? 'Set pot' : 'Set pot won'}</span>
-      <b>{full ? m.setPot.toLocaleString('en-GB') : `refills to ${RULES.setPot.toLocaleString('en-GB')} next set`}</b>
-      {full && <small>Crash to win it</small>}
-    </motion.div>
-  );
 }
 
 /** 😂 when someone makes a hilarious mistake: a flopped Crash, a big bet on the worst hand, or going bust. */

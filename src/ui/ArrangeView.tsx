@@ -16,7 +16,7 @@ interface Slot {
 interface Props {
   m: Match;
   me: number;
-  onLock: (arr: Arrangement, crash: boolean) => void;
+  onLock: (arr: Arrangement) => void;
   deadline?: number | null;
 }
 
@@ -75,7 +75,6 @@ function LockedIn({ m, me, deadline }: { m: Match; me: number; deadline?: number
           </div>
         ))}
       </div>
-      {m.deal.crash[me] && <p className="crash-hint static">You’ve called Crash. The table finds out when hand 1 starts.</p>}
     </section>
   );
 }
@@ -88,7 +87,6 @@ function Builder({ m, me, onLock, deadline }: Props) {
   const [slots, setSlots] = useState<Slot[]>(fresh);
   const [activeId, setActiveId] = useState(0);
   const [bySuit, setBySuit] = useState(true);
-  const [crash, setCrash] = useState(false);
 
   const view = ordered(slots);
   const placed = slots.flatMap((s) => s.cards);
@@ -120,7 +118,6 @@ function Builder({ m, me, onLock, deadline }: Props) {
 
   const toggleDecline = (slotId: number) => {
     setSlots(slots.map((s) => (s.id === slotId ? { ...s, declined: !s.declined, cards: [] } : s)));
-    setCrash(false);
     const next = openSlots(slots.filter((s) => s.id !== slotId))[0];
     if (next) setActiveId(next.id);
   };
@@ -133,7 +130,7 @@ function Builder({ m, me, onLock, deadline }: Props) {
 
   const lock = () => {
     const hands = ordered(slots).map((s) => (s.declined ? null : s.cards));
-    onLock({ hands, spares: pool }, crash);
+    onLock({ hands, spares: pool });
   };
 
   return (
@@ -241,17 +238,6 @@ function Builder({ m, me, onLock, deadline }: Props) {
       </LayoutGroup>
 
       <footer className="dock">
-        <button
-          type="button"
-          className={`crash-toggle${crash ? ' on' : ''}`}
-          disabled={anyDeclined}
-          onClick={() => setCrash(!crash)}
-          aria-pressed={crash}
-          title="Predict you'll win every hand"
-        >
-          <span className="crash-dot" />
-          Crash
-        </button>
         <button type="button" className="btn ghost" onClick={auto}>
           Auto
         </button>
@@ -262,13 +248,6 @@ function Builder({ m, me, onLock, deadline }: Props) {
           Lock in
         </button>
       </footer>
-      <AnimatePresence>
-        {crash && (
-          <motion.p className="crash-hint" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            Crash called: win every hand to take the set pot plus double everyone’s bets. Lose one and you lose half your tokens — and sit out the leg.
-          </motion.p>
-        )}
-      </AnimatePresence>
     </section>
   );
 }

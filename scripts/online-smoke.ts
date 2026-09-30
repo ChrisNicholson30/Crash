@@ -129,7 +129,7 @@ while (Date.now() < deadline) {
     if (m.phase === 'reveal' && !checkedOpeningOnly) {
       const before = s.errors.length;
       s.ws.send(JSON.stringify({ t: 'bet', amount: 1000 }));
-      s.ws.send(JSON.stringify({ t: 'crash' }));
+      s.ws.send(JSON.stringify({ t: 'crash', amount: 1000 }));
       const end = Date.now() + 3000;
       while (s.errors.length < before + 2 && Date.now() < end) await wait(50);
       const rejected = s.errors.splice(before);
@@ -156,9 +156,7 @@ assert(final.deal.number > DEALS || final.phase === 'gameOver', `played ${DEALS}
 assert(checkedPrivacy, 'privacy checked during betting');
 assert(checkedOpeningOnly, 'server checked late bets and Crash calls');
 const total = final.players.reduce((s, p) => s + p.tokens, 0);
-// Tokens only move between players, except a successful Crash, which adds the set pot.
-const potsPaid = RULES.setPot * (final.setNumber - 1) + (RULES.setPot - final.setPot);
-assert(total === 4 * RULES.startTokens + potsPaid, `tokens conserved (${total})`);
+assert(total === 4 * RULES.startTokens, `tokens conserved (${total})`);
 assert(seatsOf(A) !== seatsOf(B), 'different seats');
 const unexpected = [...A.errors, ...B.errors].filter((e) => !/host/.test(e));
 assert(unexpected.length === 0, `no errors during play: ${unexpected.join('; ')}`);

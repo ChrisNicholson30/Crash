@@ -13,10 +13,6 @@ export const RULES = {
   minBet: 100,
   /** Minimum opening stake for a player who calls Crash. */
   crashMinBet: 500,
-  /** Crash settles at this multiple of the loser's bets for the deal. */
-  crashMultiplier: 2,
-  /** Pot for each set, won by a successful Crash; refills when a new set starts. */
-  setPot: 100_000,
 } as const;
 
 /** Cards dealt and hands made, by number of players still in. */
@@ -67,8 +63,6 @@ export interface CrashResult {
   player: number;
   success: boolean;
   transfers: Transfer[];
-  /** Set pot won (success only). */
-  setPot: number;
 }
 
 export interface DealState {
@@ -118,8 +112,6 @@ export interface Match {
   sets: number[];
   setNumber: number;
   legNumber: number;
-  /** Tokens waiting for the next successful Crash this set. */
-  setPot: number;
   phase: Phase;
   deal: DealState;
   outcome: DealOutcome | null;
@@ -160,7 +152,6 @@ export function newMatchWith(seats: { name: string; isHuman: boolean; id?: strin
     sets: zeros(),
     setNumber: 1,
     legNumber: 1,
-    setPot: RULES.setPot,
     phase: 'arrange',
     deal: undefined as unknown as DealState,
     outcome: null,
@@ -298,6 +289,11 @@ export function callCrash(m: Match, seat: number): Match {
   crash[seat] = true;
   crashFrom[seat] = 0;
   return { ...m, deal: { ...d, crash, crashFrom } };
+}
+
+/** An opening Crash call and its chosen stake are one decision. */
+export function placeCrashFor(m: Match, seat: number, amount: number, rng: Rng = Math.random): Match {
+  return placeBetFor(callCrash(m, seat), seat, amount, rng);
 }
 
 /** Single-player shortcut: seat 0 locks in. */
@@ -480,10 +476,6 @@ export function wonEveryHand(d: DealState, seat: number): boolean {
   return d.results.every((r) => d.active.every((o) => o === seat || r.values[seat]! > r.values[o]!));
 }
 
-function totalBets(d: DealState, seat: number): number {
-  return d.results.reduce((s, r) => s + r.bets[seat], 0);
-}
-
 function finishDeal(m: Match): Match {
   const d = m.deal;
   const players = m.players.map((p) => ({ ...p }));
@@ -494,30 +486,25 @@ function finishDeal(m: Match): Match {
     return { from, to, amount: paid };
   };
 
-  // Crash: win every hand and you take the set pot, and each opponent pays double their bets.
-  // Miss and you lose half your tokens (half your remaining credit if in debt), shared among
-  // your opponents — and you sit out the rest of the leg.
-  let setPot = m.setPot;
+  // Crash settles against half the caller's chosen opening stake.
+  // On success each opponent pays that amount; on failure the caller pays it once,
+  // shared among the opponents, and sits out the rest of the leg.
   const crashResults: CrashResult[] = [];
   for (const seat of d.betOrder) {
     if (!d.crash[seat]) continue;
     const success = wonEveryHand(d, seat);
     const opponents = d.active.filter((o) => o !== seat);
+    const halfStake = Math.floor((d.bets[0][seat] ?? 0) / 2);
     let transfers: Transfer[];
-    let won = 0;
     if (success) {
-      transfers = opponents.map((o) => pay(o, seat, RULES.crashMultiplier * totalBets(d, o)));
-      won = setPot;
-      players[seat].tokens += won;
-      setPot = 0;
+      transfers = opponents.map((o) => pay(o, seat, halfStake));
     } else {
-      const t = players[seat].tokens;
-      const loss = Math.floor((t > 0 ? t : t + RULES.debtLimit) / 2);
+      const loss = Math.max(0, Math.min(halfStake, players[seat].tokens + RULES.debtLimit));
       const share = Math.floor(loss / opponents.length);
-      transfers = opponents.map((o, i) => pay(seat, o, share + (i === 0 ? loss - share * opponents.length : 0)));
+      transfers = opponents.map((o, i) => pay(seat, o, share + (i < loss % opponents.length ? 1 : 0)));
       players[seat].sittingOut = true;
     }
-    crashResults.push({ player: seat, success, transfers, setPot: won });
+    crashResults.push({ player: seat, success, transfers });
   }
 
   const eliminated: number[] = [];
@@ -557,7 +544,6 @@ function finishDeal(m: Match): Match {
       if (legs[w] >= RULES.legsPerSet) {
         outcome.setWinner = w;
         sets[w]++;
-        setPot = RULES.setPot;
         legs = legs.map(() => 0);
         setNumber++;
         legNumber = 1;
@@ -586,7 +572,6 @@ function finishDeal(m: Match): Match {
     sets,
     legNumber,
     setNumber,
-    setPot,
     outcome,
     winner,
     phase: over ? 'gameOver' : 'dealEnd',

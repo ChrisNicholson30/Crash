@@ -36,9 +36,9 @@ export type ServerMsg =
 /** Client → server. */
 export type ClientMsg =
   | { t: 'start' }
-  | { t: 'arrange'; arrangement: Arrangement; crash: boolean }
+  | { t: 'arrange'; arrangement: Arrangement }
   | { t: 'bet'; amount: number }
-  | { t: 'crash' }
+  | { t: 'crash'; amount: number }
   | { t: 'next' }
   | { t: 'chat'; text: string }
   | { t: 'leave' }

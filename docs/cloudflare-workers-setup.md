@@ -30,7 +30,7 @@ Only `/api/*` runs Worker code (`run_worker_first`). Every other request is a fr
 | D1 database `crash-db` | **Created** in your account (Western Europe), id `dd8df0ae-f8e1-4132-9a1b-b7b6a5a3e8a9` |
 | Schema | **Applied** to the live database |
 | `wrangler.jsonc` | Points at that database; declares the `GameRoom` Durable Object |
-| Worker deployed | **Not yet.** See step 3 |
+| Preview D1 database `crash-preview-db` | **Created** in Western Europe, id `ba4744cc-dde2-4f8f-b4b6-17d81cdcc811`; separate from production |
 
 ## 3. Deploy
 
@@ -38,7 +38,7 @@ The Durable Object and the Worker are created on the first deploy. Choose one of
 
 ### A. Workers Builds (recommended): deploys on every push
 
-1. Cloudflare dashboard: **Workers & Pages** → **Create** → **Import a repository** → `ChrisNicholson30/Crash-`.
+1. Cloudflare dashboard: **Workers & Pages** → **Create** → **Import a repository** → `ChrisNicholson30/Crash`.
 2. Build settings:
 
 | Setting | Value |
@@ -47,9 +47,16 @@ The Durable Object and the Worker are created on the first deploy. Choose one of
 | Production branch | `main` |
 | Build command | `pnpm install --frozen-lockfile && pnpm build` |
 | Deploy command | `npx wrangler d1 migrations apply crash-db --remote && npx wrangler deploy` |
+| Preview command | `npx wrangler preview` |
 | Environment variable | `NODE_VERSION` = `22` |
 
 3. Save and deploy. The site goes live at `https://crash.<your-subdomain>.workers.dev`.
+
+Pull-request previews use `crash-preview-db` through the `previews` block in `wrangler.jsonc`; they never bind to the production D1 database. Each preview also gets its own Durable Object namespace. When adding a D1 migration, apply it to the preview database before deploying the preview:
+
+```sh
+npx wrangler d1 migrations apply PREVIEW_DB --remote --config wrangler.preview-migrations.jsonc
+```
 
 ### B. From your own machine
 
@@ -70,7 +77,7 @@ Worker `crash` → **Settings → Domains & Routes → Add → Custom domain**, 
 |---|---|
 | `pnpm cf:dev` | Builds, applies migrations to the **local** database, and runs everything (app, API, live tables) at `localhost:8787` |
 | `pnpm dev` | Vite with hot reload; it forwards `/api` to `localhost:8787`, so run `pnpm cf:dev` alongside it |
-| `pnpm test` | Rules engine tests: 34, covering Crash, sitting out, multiplayer and privacy |
+| `pnpm test` | Rules engine tests, covering Crash, sitting out, multiplayer and privacy |
 | `node --experimental-transform-types scripts/online-smoke.ts` | API and live-table test against `localhost:8787` |
 | `node scripts/e2e-online.mjs` | Two browsers sign up, pair by code, chat and play three deals |
 | `node scripts/e2e-smoke.mjs http://localhost:8787/` | Solo game at phone size, plus offline reload |
