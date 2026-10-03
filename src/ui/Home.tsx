@@ -1,8 +1,5 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import type { Card } from '../engine/cards.ts';
-import { PlayingCard } from './PlayingCard.tsx';
-import { Coin } from './Token.tsx';
 
 interface Props {
   user: { username: string } | null;
@@ -13,14 +10,6 @@ interface Props {
   onStart: (players: 3 | 4, name: string) => void;
   onRules: () => void;
 }
-
-const FAN: Card[] = [
-  { rank: 14, suit: 'S' },
-  { rank: 13, suit: 'H' },
-  { rank: 12, suit: 'D' },
-  { rank: 11, suit: 'C' },
-  { rank: 10, suit: 'H' },
-];
 
 export function Home({ user, unread, onOnline, canResume, onResume, onStart, onRules }: Props) {
   const [players, setPlayers] = useState<3 | 4>(4);
@@ -44,45 +33,14 @@ export function Home({ user, unread, onOnline, canResume, onResume, onStart, onR
 
   return (
     <main className="home">
-      <div className="fan" aria-hidden="true">
-        {[0, 1, 2].map((i) => (
-          <motion.span
-            key={`coin${i}`}
-            className="orbit-coin"
-            style={{ left: ['6%', '86%', '74%'][i], top: ['58%', '18%', '78%'][i] }}
-            initial={{ opacity: 0, scale: 0 }}
-            animate={{ opacity: 1, scale: 1, y: [0, -14, 0], rotateY: [0, 360] }}
-            transition={{ opacity: { delay: 0.8 + i * 0.15 }, scale: { delay: 0.8 + i * 0.15, type: 'spring' }, y: { duration: 2.6 + i * 0.4, repeat: Infinity, ease: 'easeInOut' }, rotateY: { duration: 3 + i, repeat: Infinity, ease: 'linear' } }}
-          >
-            <Coin size={[34, 26, 22][i]} />
-          </motion.span>
-        ))}
-        {FAN.map((c, i) => (
-          <motion.div
-            key={i}
-            className="fan-card"
-            initial={{ opacity: 0, y: 80, rotate: 0 }}
-            animate={{ opacity: 1, y: [0, -6, 0], rotate: (i - 2) * 11 }}
-            transition={{
-              opacity: { delay: 0.1 + i * 0.08 },
-              rotate: { type: 'spring', stiffness: 120, damping: 14, delay: 0.1 + i * 0.08 },
-              y: { duration: 4, repeat: Infinity, ease: 'easeInOut', delay: i * 0.3 },
-            }}
-            style={{ zIndex: i }}
-          >
-            <PlayingCard card={c} size="lg" />
-          </motion.div>
-        ))}
-      </div>
+      <img className="hero-card" src="/card-back.webp" alt="" width={168} height={252} />
 
-      <motion.h1 className="wordmark" initial={{ opacity: 0, letterSpacing: '0.6em' }} animate={{ opacity: 1, letterSpacing: '0.12em' }} transition={{ duration: 1.1, ease: [0.2, 0.8, 0.2, 1] }}>
-        CRASH
-      </motion.h1>
-      <motion.p className="tagline" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
+      <h1 className="wordmark">CRASH</h1>
+      <p className="tagline">
         Thirteen-card brag. Build your hands, back them with Barney tokens, and call the Crash.
-      </motion.p>
+      </p>
 
-      <motion.section className="glass setup" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, type: 'spring', stiffness: 160, damping: 22 }}>
+      <section className="glass setup">
         <label className="field">
           <span>Your name</span>
           <input value={name} placeholder="You" maxLength={12} onChange={(e) => setName(e.target.value)} />
@@ -132,7 +90,7 @@ export function Home({ user, unread, onOnline, canResume, onResume, onStart, onR
         <button type="button" className="btn link" onClick={onRules}>
           How to play
         </button>
-      </motion.section>
+      </section>
     </main>
   );
 }

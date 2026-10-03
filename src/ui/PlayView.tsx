@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { CATEGORY_NAME, displayOrder, evaluate } from '../engine/hands.ts';
 import { RULES, canCallCrash, currentBettor, maxBet, minBet, type Match } from '../engine/match.ts';
@@ -6,7 +6,6 @@ import { PlayingCard } from './PlayingCard.tsx';
 import { Coin } from './Token.tsx';
 import { SEAT_COLORS } from './SeatRail.tsx';
 import { useCountdown } from './Game.tsx';
-import { CoinFlight, type Point } from './Fx.tsx';
 
 interface Props {
   m: Match;
@@ -41,30 +40,6 @@ export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline }:
   // Me first, then everyone else in seat order.
   const cols = [...d.active.filter((s) => s === me), ...d.active.filter((s) => s !== me)];
 
-  // Coins fly from the pot to whoever takes it.
-  const potRef = useRef<HTMLDivElement>(null);
-  const cellRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const [flights, setFlights] = useState<{ key: string; from: Point; to: Point }[]>([]);
-  useEffect(() => {
-    if (!result || result.pot <= 0 || m.phase !== 'reveal') return;
-    const t = setTimeout(() => {
-      const center = (el: Element | null | undefined): Point | null => {
-        if (!el) return null;
-        const r = el.getBoundingClientRect();
-        return { x: r.left + r.width / 2 - 9, y: r.top + r.height / 2 - 9 };
-      };
-      const from = center(potRef.current);
-      if (!from) return;
-      setFlights(
-        result.potWinners.flatMap((s) => {
-          const to = center(cellRefs.current[`${pos}:${s}`]);
-          return to ? [{ key: `${d.number}-${pos}-${s}`, from, to }] : [];
-        }),
-      );
-    }, 900);
-    return () => clearTimeout(t);
-  }, [d.number, pos, m.phase]); // eslint-disable-line react-hooks/exhaustive-deps
-
   return (
     <section className="play">
       <header className="stage-head">
@@ -82,10 +57,10 @@ export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline }:
                   : `Waiting for ${turn !== null ? m.players[turn].name : '…'}.`}
           </p>
         </div>
-        <div className="pot" aria-live="polite" ref={potRef}>
-          <motion.div className="pot-stack" key={pot} initial={{ scale: 0.8, rotate: -20 }} animate={{ scale: 1, rotate: 0 }}>
+        <div className="pot" aria-live="polite">
+          <div className="pot-stack">
             <Coin size={26} />
-          </motion.div>
+          </div>
           <div>
             <small>Pot</small>
             <b className="pot-num">{pot.toLocaleString('en-GB')}</b>
@@ -93,9 +68,6 @@ export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline }:
         </div>
       </header>
 
-      {flights.map((f) => (
-        <CoinFlight key={f.key} from={f.from} to={f.to} count={Math.min(12, 4 + Math.round((result?.pot ?? 0) / 50))} />
-      ))}
 
       <div className="board" style={{ ['--cols' as string]: cols.length }}>
         <div className="board-row board-head">
@@ -166,9 +138,6 @@ export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline }:
                 return (
                   <div
                     key={seat}
-                    ref={(el) => {
-                      cellRefs.current[`${p}:${seat}`] = el;
-                    }}
                     className={`cell${top ? ' top' : ''}${seat === me ? ' me' : ''}`}
                   >
                     {hand ? (

@@ -52,7 +52,9 @@ export function RoomScreen({ user, tableId, onLeave }: Props) {
   const { room, me, match } = snap;
   const chatButton = (
     <button type="button" className="icon-btn chat-btn" aria-label="Table chat" onClick={() => setChatOpen(true)}>
-      💬
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+        <path d="M4 5h16v11H9l-5 4z" />
+      </svg>
       {unread > 0 && <span className="unread dot">{unread}</span>}
     </button>
   );
@@ -276,7 +278,7 @@ function ChatSheet({ lines, me, onSend, onClose }: { lines: ChatLine[]; me: stri
   const dragControls = useDragControls();
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [lines.length]);
-  const quick = ['Nice hand!', 'CRASH incoming 😤', 'Gg', 'No way!', '🔥'];
+  const quick = ['Nice hand!', 'CRASH incoming', 'Gg', 'No way!', 'Unlucky'];
   const submit = (t: string) => {
     if (!t.trim()) return;
     onSend(t.trim());

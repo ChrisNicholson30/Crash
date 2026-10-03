@@ -61,9 +61,7 @@ export function PlayingCard({ card, faceDown, size = 'md', selected, dim, glow, 
             </>
           )}
         </span>
-        <span className="pc-face pc-back" aria-hidden="true">
-          <span className="pc-back-mark">C</span>
-        </span>
+        <span className="pc-face pc-back" aria-hidden="true" />
       </motion.span>
     </Tag>
   );

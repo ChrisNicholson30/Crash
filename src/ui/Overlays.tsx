@@ -1,18 +1,9 @@
 import { useEffect, useState } from 'react';
 import { motion, useDragControls } from 'motion/react';
-import confetti from 'canvas-confetti';
 import { RULES, type Match } from '../engine/match.ts';
 import type { ReactNode } from 'react';
 import { Coin, Tokens } from './Token.tsx';
 import { SEAT_COLORS } from './SeatRail.tsx';
-
-const burst = (colors = ['#d8b56a', '#f3dc9c', '#f7f4ec', '#6fb7a0']) => {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const fire = (x: number) => confetti({ particleCount: 90, spread: 70, startVelocity: 48, origin: { x, y: 0.7 }, colors, disableForReducedMotion: true });
-  fire(0.2);
-  setTimeout(() => fire(0.8), 180);
-  setTimeout(() => fire(0.5), 360);
-};
 
 /** Full-screen "CRASH" takeover. */
 export function CrashTakeover({ m, me, onDone }: { m: Match; me: number; onDone: () => void }) {
@@ -20,7 +11,6 @@ export function CrashTakeover({ m, me, onDone }: { m: Match; me: number; onDone:
   const anyWin = results.some((r) => r.success);
   useEffect(() => {
     navigator.vibrate?.([60, 40, 120, 40, 200]);
-    if (anyWin) setTimeout(() => burst(['#ff4d3d', '#d8b56a', '#f7f4ec']), 700);
   }, [anyWin]);
 
   return (
@@ -102,7 +92,7 @@ export function CrashTakeover({ m, me, onDone }: { m: Match; me: number; onDone:
                   <b>
                     <Coin size={14} /> {total.toLocaleString('en-GB')}
                   </b>{' '}
-                  shared out — and {r.player === me ? 'you sit' : 'they sit'} out the rest of the leg. 😂
+                  shared out — and {r.player === me ? 'you sit' : 'they sit'} out the rest of the leg.
                 </p>
               )}
             </div>

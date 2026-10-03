@@ -2,7 +2,7 @@ import { motion } from 'motion/react';
 import { RULES, type Match } from '../engine/match.ts';
 import { Tokens } from './Token.tsx';
 
-export const SEAT_COLORS = ['#d8b56a', '#6fb7a0', '#c98e6b', '#8fa3d9'];
+export const SEAT_COLORS = ['#e5484d', '#c9ccd2', '#6fa8dc', '#b08fd9'];
 
 function Pips({ n, of, label }: { n: number; of: number; label: string }) {
   return (
@@ -37,9 +37,9 @@ export function SeatRail({ m, me, highlight }: { m: Match; me: number; highlight
               {m.deal.crash[s] && m.phase !== 'arrange' && <span className="badge crash">CRASH</span>}
             </span>
             <span className="seat-pts">
-              <motion.b key={pts} initial={{ scale: 1.5, color: '#f3dc9c' }} animate={{ scale: 1, color: '#f3efe3' }}>
+              <b key={pts}>
                 {pts}
-              </motion.b>
+              </b>
               <small>/{RULES.pointsPerLeg}</small>
             </span>
             <span className="seat-bar">
