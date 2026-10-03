@@ -12,8 +12,8 @@ export default defineConfig({
         name: 'Crash',
         short_name: 'Crash',
         description: 'Crash — the three-card hand game for 3 or 4 players.',
-        theme_color: '#06110d',
-        background_color: '#06110d',
+        theme_color: '#09090a',
+        background_color: '#09090a',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
@@ -24,7 +24,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2}'],
         // The API and live tables must always hit the network.
         navigateFallbackDenylist: [/^\/api\//],
       },

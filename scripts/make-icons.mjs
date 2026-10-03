@@ -12,7 +12,7 @@ for (const [size, file, pad] of [
 ]) {
   const page = await browser.newPage({ viewport: { width: size, height: size } });
   await page.setContent(
-    `<style>html,body{margin:0;background:#1F1F1F}svg{display:block;width:${size - pad * 2}px;height:${size - pad * 2}px;margin:${pad}px}</style>${svg}`,
+    `<style>html,body{margin:0;background:#0A0A0B}svg{display:block;width:${size - pad * 2}px;height:${size - pad * 2}px;margin:${pad}px}</style>${svg}`,
   );
   await page.screenshot({ path: new URL(`../public/${file}`, import.meta.url).pathname });
   await page.close();
