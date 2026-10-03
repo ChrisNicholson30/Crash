@@ -808,7 +808,7 @@
 .cell-declined {
   display: grid;
   place-items: center;
-  height: calc(23px * 1.4);
+  height: calc(23px * var(--card-ratio));
   font-size: 10px;
   color: var(--muted);
 }
@@ -826,7 +826,7 @@
     --w: 28px;
   }
   .cell-declined {
-    height: calc(28px * 1.4);
+    height: calc(28px * var(--card-ratio));
   }
 }
 

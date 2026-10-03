@@ -25,6 +25,8 @@
   --pos: #7fd4a8;
   --neg: #ff8a7a;
   --radius: 18px;
+  /* Card height ÷ width, matching the illustrated deck. */
+  --card-ratio: 1.6;
   --display: 'Fraunces Variable', Georgia, serif;
   --ui: 'Manrope Variable', system-ui, -apple-system, sans-serif;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -224,7 +226,7 @@ h3 {
   position: relative;
   display: inline-block;
   width: var(--w);
-  height: calc(var(--w) * 1.4);
+  height: calc(var(--w) * var(--card-ratio));
   padding: 0;
   flex-shrink: 0;
   perspective: 700px;
@@ -259,21 +261,16 @@ h3 {
   overflow: hidden;
 }
 .pc-front {
-  /* Engraved black face to match the shark card back. */
-  background: radial-gradient(120% 90% at 50% 35%, #1e1f22 0%, #111214 60%, #08080a 100%);
-  color: #e3e5e9;
+  /* Illustrated face from public/cards/. */
+  background: #0a0a0b center / cover no-repeat;
+  color: var(--silver);
   box-shadow:
-    inset 0 0 0 1px rgb(200 204 210 / 0.55),
-    inset 0 0 0 calc(var(--w) * 0.05) #0a0a0b,
-    inset 0 0 0 calc(var(--w) * 0.05 + 1px) rgb(200 204 210 / 0.28),
+    inset 0 0 0 1px rgb(200 204 210 / 0.35),
     0 1px 1px rgb(0 0 0 / 0.4),
     0 6px 14px -6px rgb(0 0 0 / 0.8);
 }
 .pc.red .pc-front {
   color: var(--suit-red);
-}
-.pc.red .pc-center {
-  text-shadow: 0 0 calc(var(--w) * 0.12) rgb(229 38 45 / 0.45);
 }
 .pc-back {
   transform: rotateY(180deg);
@@ -285,9 +282,15 @@ h3 {
 
 .pc-corner {
   position: absolute;
+  top: 0;
+  left: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  padding: calc(var(--w) * 0.06) calc(var(--w) * 0.05) calc(var(--w) * 0.05);
+  border-radius: calc(var(--w) * 0.12) 0 calc(var(--w) * 0.14) 0;
+  background: #070708;
+  box-shadow: 1px 1px 0 rgb(200 204 210 / 0.22);
   line-height: 0.95;
   font-family: var(--display);
 }
@@ -295,54 +298,17 @@ h3 {
   font-weight: 700;
   font-size: calc(var(--w) * 0.34);
   letter-spacing: -0.04em;
+  color: #f6f4f0;
 }
 .pc-corner i {
   font-style: normal;
   font-size: calc(var(--w) * 0.28);
-}
-.pc-corner.tl {
-  top: calc(var(--w) * 0.06);
-  left: calc(var(--w) * 0.07);
-}
-.pc-corner.br {
-  bottom: calc(var(--w) * 0.06);
-  right: calc(var(--w) * 0.07);
-  transform: rotate(180deg);
-}
-.pc-center {
-  position: absolute;
-  right: calc(var(--w) * 0.1);
-  bottom: calc(var(--w) * 0.14);
-  font-size: calc(var(--w) * 0.62);
-  line-height: 1;
-  opacity: 0.92;
-}
-.pc-center.court {
-  font-family: var(--display);
-  font-weight: 800;
-  font-style: italic;
-  font-size: calc(var(--w) * 0.56);
-  opacity: 0.85;
-}
-.pc-sm .pc-corner.br,
-.pc-xs .pc-corner.br,
-.pc-md .pc-corner.br {
-  display: none;
-}
-.pc-xs .pc-center {
-  display: none;
 }
 .pc-xs .pc-corner b {
   font-size: 10px;
 }
 .pc-xs .pc-corner i {
   font-size: 9px;
-}
-.pc-lg .pc-center {
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-size: calc(var(--w) * 0.5);
 }
 
 .pc.tappable {
@@ -743,7 +709,7 @@ h3 {
 .slot-cards {
   display: flex;
   gap: 4px;
-  min-height: calc(38px * 1.4);
+  min-height: calc(38px * var(--card-ratio));
   align-items: center;
 }
 .declined-note {
@@ -961,7 +927,7 @@ h3 {
 .tile-cards {
   display: flex;
   gap: 4px;
-  min-height: calc(38px * 1.4);
+  min-height: calc(38px * var(--card-ratio));
   align-items: center;
 }
 .tile-foot {
