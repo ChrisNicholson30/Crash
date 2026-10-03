@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { SUIT_NAME, SUIT_SYMBOL, cardId, isRed, rankLabel, type Card } from '../engine/cards.ts';
+import { SUIT_NAME, SUIT_SYMBOL, isRed, rankLabel, type Card } from '../engine/cards.ts';
 
 export type CardSize = 'xs' | 'sm' | 'md' | 'lg';
 
@@ -17,6 +17,8 @@ interface Props {
   dealDelay?: number;
   layoutId?: string;
 }
+
+const FACE: Record<number, string> = { 11: 'J', 12: 'Q', 13: 'K' };
 
 export function PlayingCard({ card, faceDown, size = 'md', selected, dim, glow, onClick, flipDelay = 0, dealDelay, layoutId }: Props) {
   const label = card && !faceDown ? `${rankLabel(card.rank)} of ${SUIT_NAME[card.suit]}` : 'Face-down card';
@@ -42,13 +44,21 @@ export function PlayingCard({ card, faceDown, size = 'md', selected, dim, glow, 
         animate={{ rotateY: faceDown || !card ? 180 : 0 }}
         transition={{ duration: 0.55, ease: [0.2, 0.8, 0.2, 1], delay: flipDelay }}
       >
-        <span className="pc-face pc-front" aria-hidden="true" style={card ? { backgroundImage: `url(/cards/${cardId(card)}.webp)` } : undefined}>
+        <span className="pc-face pc-front" aria-hidden="true">
           {card && (
-            // A bolder index over the artwork's own, so the card reads at hand size.
-            <span className="pc-corner tl">
-              <b>{rankLabel(card.rank)}</b>
-              <i>{SUIT_SYMBOL[card.suit]}</i>
-            </span>
+            <>
+              <span className="pc-corner tl">
+                <b>{rankLabel(card.rank)}</b>
+                <i>{SUIT_SYMBOL[card.suit]}</i>
+              </span>
+              <span className={`pc-center${FACE[card.rank] ? ' court' : ''}`}>
+                {FACE[card.rank] ?? SUIT_SYMBOL[card.suit]}
+              </span>
+              <span className="pc-corner br">
+                <b>{rankLabel(card.rank)}</b>
+                <i>{SUIT_SYMBOL[card.suit]}</i>
+              </span>
+            </>
           )}
         </span>
         <span className="pc-face pc-back" aria-hidden="true" />
