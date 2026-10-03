@@ -12,7 +12,7 @@ The three-card hand game for 3 or 4 players, as an installable web app (PWA). Pl
 - **Hands, best first:** Prile (three of a kind) · Stiff (three in a row, same suit) · Run (three in a row) · Flush (same suit). Nothing else counts. Ties go to the highest card, then the next. A-2-3 is the best run (it beats Q-K-A), and runs don't wrap (K-A-2 isn't a run).
 - **Order:** hands line up strongest first, weakest last. A hand you can't make can be **declined**; a declined hand loses to any real hand.
 - **Play:** hands are played one at a time. Each hand is compared with every opponent's hand in the same position, and each win scores 1 point.
-- **Betting:** everyone starts with 10,000 Barney tokens. At the beginning of each deal, before any hand is revealed, choose a **bet** (at least 100 per playable hand) or **Crash**. That stake is locked and applied automatically to the remaining playable hands; the best hand takes each pot. You can bet on credit down to −5,000; reach that and you're out.
+- **Betting:** everyone starts with 10,000 tokens. At the beginning of each deal, before any hand is revealed, choose a **bet** (at least 100 per playable hand) or **Crash**. That stake is locked and applied automatically to the remaining playable hands; the best hand takes each pot. You can bet on credit down to −5,000; reach that and you're out.
 - **Crash:** on their opening betting turn, before hand 1 is revealed, a player can choose a stake and call Crash, predicting they'll win every hand. Everyone is told straight away.
   - Pull it off and each opponent pays you **half your chosen stake**.
   - Miss and you pay **half your chosen stake**, shared among the opponents, and sit out the rest of the leg.

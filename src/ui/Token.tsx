@@ -1,9 +1,7 @@
 
 export function Coin({ size = 16 }: { size?: number }) {
   return (
-    <span className="coin" style={{ width: size, height: size, fontSize: size * 0.58 }} aria-hidden="true">
-      B
-    </span>
+    <span className="coin" style={{ width: size, height: size }} aria-hidden="true" />
   );
 }
 

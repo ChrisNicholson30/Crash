@@ -37,7 +37,7 @@ export function Home({ user, unread, onOnline, canResume, onResume, onStart, onR
 
       <h1 className="wordmark">CRASH</h1>
       <p className="tagline">
-        Thirteen-card brag. Build your hands, back them with Barney tokens, and call the Crash.
+        Thirteen-card brag. Build your hands, back them with tokens, and call the Crash.
       </p>
 
       <section className="glass setup">

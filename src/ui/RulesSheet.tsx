@@ -69,7 +69,7 @@ export function RulesSheet({ onClose }: { onClose: () => void }) {
           1 point; a dead heat scores nothing.
         </p>
 
-        <h3>3 · Bet Barney tokens</h3>
+        <h3>3 · Bet tokens</h3>
         <p>
           Everyone starts with {RULES.startTokens.toLocaleString('en-GB')} tokens. At the beginning of each deal, before hand 1 turns over, players choose a stake in
           turn (at least {RULES.minBet} per playable hand). That stake is locked for the deal and applied automatically to
