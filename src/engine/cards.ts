@@ -1,6 +1,6 @@
 export type Suit = 'S' | 'H' | 'D' | 'C';
 
-/** Rank 2–10, J=11, Q=12, K=13, A=14. Aces also play low in A-2-3 runs. */
+/** Rank 2–10, J=11, Q=12, K=13, A=14. A-2-3 is also a run (the best one). */
 export interface Card {
   rank: number;
   suit: Suit;

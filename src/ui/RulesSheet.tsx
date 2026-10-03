@@ -58,8 +58,8 @@ export function RulesSheet({ onClose }: { onClose: () => void }) {
           ))}
         </ul>
         <p>
-          Same type? The highest card wins, then the next. Aces are high (Q-K-A) or low (A-2-3, the lowest run); runs don’t wrap
-          round. Your hands always line up strongest first, weakest last. Can’t make your last hand? <b>Decline</b> it — it loses
+          Same type? The highest card wins, then the next. A-2-3 is the best run, above Q-K-A; runs don’t wrap
+          round (K-A-2 isn’t a run). Your hands always line up strongest first, weakest last. Can’t make your last hand? <b>Decline</b> it — it loses
           to any real hand. Spare cards are thrown away.
         </p>
 
