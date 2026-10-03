@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makeDeck, mulberry32, sameCard, shuffle, type Card, type Suit } from './cards.ts';
-import { Category, compareHands, evaluate, isPlayable } from './hands.ts';
+import { Category, compareHands, displayOrder, evaluate, isPlayable } from './hands.ts';
 import { bestPartition } from './partition.ts';
 import { aiArrange, positionWinChance } from './ai.ts';
 import { HIDDEN, viewFor } from './view.ts';
@@ -84,10 +84,19 @@ describe('hand strength (card rules)', () => {
 
   it('breaks ties by the highest card, then the next', () => {
     expect(compareHands(h('AS AH AD'), h('KS KH KD'))).toBe(1);
-    expect(compareHands(h('AS 2D 3C'), h('2S 3D 4C'))).toBe(-1); // A-2-3 is the lowest run
+    expect(compareHands(h('AS 2D 3C'), h('QS KD AC'))).toBe(1); // A-2-3 is the top run
+    expect(compareHands(h('AS 2D 3C'), h('2S 3D 4C'))).toBe(1);
+    expect(compareHands(h('AH 2H 3H'), h('QS KS AS'))).toBe(1); // and the top Stiff
+    expect(compareHands(h('AH 2H 3H'), h('2S 2H 2D'))).toBe(-1); // but still below any Prile
+    expect(evaluate(h('KS AD 2C')).category).toBe(Category.None); // runs don't wrap
     expect(compareHands(h('QS KD AC'), h('JS QD KC'))).toBe(1);
     expect(compareHands(h('KH 6H 2H'), h('KD 5D 4D'))).toBe(1);
     expect(compareHands(h('2C 3D 4S'), h('2H 3S 4D'))).toBe(0);
+  });
+
+  it('shows A-2-3 as A 2 3', () => {
+    expect(displayOrder(h('3D AS 2C')).map((c) => c.rank)).toEqual([14, 2, 3]);
+    expect(displayOrder(h('QS AC KD')).map((c) => c.rank)).toEqual([14, 13, 12]);
   });
 
   it('a declined hand loses to any real hand and ties another declined hand', () => {
