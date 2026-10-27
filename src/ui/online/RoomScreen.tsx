@@ -128,7 +128,7 @@ export function RoomScreen({ user, tableId, onLeave }: Props) {
     </>
   );
 
-  if (room.status === 'lobby' || !match || me === null) {
+  if (room.status === 'lobby' || !match) {
     return (
       <>
         <Lobby user={user} snap={snap} onStart={() => send({ t: 'start' })} onOptions={(options) => send({ t: 'options', options })} onLeave={() => {
