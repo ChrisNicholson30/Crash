@@ -9,6 +9,7 @@ import '@fontsource-variable/fraunces/opsz-italic.css';
 import '@fontsource-variable/manrope';
 import './ui/theme.css';
 import './ui/effects.css';
+import './ui/extras.css';
 
 registerSW({ immediate: true });
 // A still, no-frills table: every motion animation jumps straight to its end state.

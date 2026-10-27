@@ -495,8 +495,8 @@ describe('match options', () => {
   });
 
   it('matches saved before options existed play full length', () => {
-    const m = newMatch(4);
-    const { options: _, ...old } = m;
+    const old: Match = JSON.parse(JSON.stringify({ ...newMatch(4), options: undefined }));
+    expect(old.options).toBeUndefined();
     expect(matchRules(old)).toEqual({ pointsPerLeg: 10, legsPerSet: 3, setsToWin: 3 });
   });
 
@@ -546,5 +546,34 @@ describe('hand odds', () => {
     expect(strong).toBeGreaterThan(0.9);
     expect(weak).toBeLessThan(0.01);
     expect(crashChance([h('AS AH AD'), h('KS KH KD'), h('QS QH QD'), h('JS JH JD')], 2)).toBeGreaterThan(strong);
+  });
+});
+
+describe('records', () => {
+  it('tallies points, pots, Crash calls and the best hand from finished deals', async () => {
+    const { addDeal, addGame, dealTally, emptyTally } = await import('./tally.ts');
+    const rng = mulberry32(12);
+    let m = newMatch(4, 'Me', rng);
+    let t = emptyTally();
+    let points = 0;
+    while (m.phase !== 'gameOver') {
+      m = autoPlayDeal(m, rng, true);
+      points += m.deal.pointsThisDeal[HUMAN];
+      t = addDeal(t, dealTally(m, HUMAN));
+      if (m.phase === 'dealEnd') m = advance(m, rng);
+    }
+    t = addGame(t, m.winner === HUMAN);
+    expect(t.points).toBe(points);
+    expect(t.games).toBe(1);
+    expect(t.crashes).toBeGreaterThanOrEqual(t.crashesWon);
+    expect(t.best?.length).toBe(3);
+    expect(t.deals).toBeGreaterThan(0);
+  });
+
+  it('counts win streaks', async () => {
+    const { addGame, emptyTally } = await import('./tally.ts');
+    let t = emptyTally();
+    for (const won of [true, true, false, true]) t = addGame(t, won);
+    expect([t.games, t.wins, t.streak, t.bestStreak]).toEqual([4, 3, 1, 2]);
   });
 });

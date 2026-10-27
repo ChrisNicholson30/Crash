@@ -30,7 +30,7 @@ export const DEFAULT_OPTIONS: MatchOptions = { length: 'full', skill: 'normal' }
 export const LENGTHS: Record<MatchLength, { legsPerSet: number; setsToWin: number; name: string; blurb: string }> = {
   quick: { legsPerSet: 1, setsToWin: 1, name: 'Quick', blurb: 'One leg' },
   standard: { legsPerSet: 3, setsToWin: 1, name: 'Standard', blurb: 'First to 3 legs' },
-  full: { legsPerSet: 3, setsToWin: 3, name: 'Full', blurb: '3 sets of 3 legs' },
+  full: { legsPerSet: 3, setsToWin: 3, name: 'Full', blurb: 'First to 3 sets' },
 };
 
 export const SKILLS: Record<Skill, { name: string; blurb: string }> = {
@@ -136,6 +136,8 @@ export type Phase = 'arrange' | 'betting' | 'reveal' | 'dealEnd' | 'gameOver';
 
 export interface Match {
   version: 3;
+  /** Random id, so a record of the match is only counted once. Missing on older saves. */
+  id?: string;
   players: Player[];
   /** Points in the current leg. */
   points: number[];
@@ -191,6 +193,8 @@ export function newMatchWith(
   const dealer = Math.floor(rng() * playerCount);
   const shell: Match = {
     version: 3,
+    // Not drawn from `rng`, so seeded deals stay reproducible.
+    id: Math.random().toString(36).slice(2, 10) + Date.now().toString(36),
     players,
     points: zeros(),
     legs: zeros(),

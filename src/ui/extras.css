@@ -1,0 +1,409 @@
+/* ============================================================
+   Options, odds, pass-and-play, menus and online extras.
+   Same black, red and silver; nothing loops or moves.
+   ============================================================ */
+
+/* ---------- Home ---------- */
+
+.seg.three {
+  grid-template-columns: repeat(3, 1fr);
+}
+.seg.three button {
+  padding: 9px 8px;
+}
+.seg[role='radiogroup'] button:only-child {
+  grid-column: 1 / -1;
+}
+.field-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+.names {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.names input {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-line);
+  background: rgb(0 0 0 / 0.25);
+  font-size: 16px;
+  min-width: 0;
+}
+.facts-line {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+.facts-line b {
+  color: var(--brass-hi);
+}
+.home-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  column-gap: 18px;
+}
+
+/* ---------- Switches & menus ---------- */
+
+.toggles {
+  display: grid;
+  gap: 2px;
+  margin: 10px 0 18px;
+}
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 2px;
+  text-align: left;
+  border-bottom: 1px solid var(--glass-line);
+}
+.toggle-text {
+  flex: 1;
+  display: grid;
+}
+.toggle-text small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 46px;
+  height: 28px;
+  border-radius: 99px;
+  background: rgb(255 255 255 / 0.14);
+}
+.switch i {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--silver);
+}
+.switch.on {
+  background: var(--brass);
+}
+.switch.on i {
+  left: 21px;
+  background: #fff;
+}
+.menu-sheet .row2 {
+  margin-top: 4px;
+}
+.steps {
+  margin: 0 0 18px;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+}
+
+/* ---------- Record ---------- */
+
+.record {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  text-align: center;
+}
+.record li {
+  padding: 10px 4px;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.04);
+  border: 1px solid var(--glass-line);
+  display: grid;
+}
+.record b {
+  font-family: var(--display);
+  font-size: 22px;
+  color: var(--text);
+}
+.record small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.best-hand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgb(0 0 0 / 0.25);
+}
+.best-hand > span:first-child {
+  display: grid;
+}
+.best-hand small {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ---------- Odds ---------- */
+
+.slot-odds {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  width: 54px;
+  height: 18px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgb(255 255 255 / 0.08);
+}
+.slot-odds i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, var(--brass-lo), var(--brass));
+}
+.slot-odds b {
+  position: relative;
+  width: 100%;
+  text-align: center;
+  font-size: 11px;
+  color: #fff;
+}
+.slot-odds + .chip-btn {
+  margin-left: 6px;
+}
+.cell-odds {
+  margin-left: auto;
+  color: var(--silver);
+  opacity: 0.8;
+}
+.odds-line {
+  margin: 4px 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+.odds-line b {
+  color: var(--text);
+}
+.bet-dock .odds-line {
+  margin: 0 0 6px;
+}
+
+/* ---------- Watching / pass-and-play ---------- */
+
+.watch-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.watch-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+}
+.watch-list li span {
+  color: var(--muted);
+}
+.watch-list li.done span {
+  color: var(--pos);
+}
+.handover-card {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin-top: 28px;
+  padding: 24px 18px;
+  text-align: center;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.06), rgb(255 255 255 / 0.02));
+  border: 1px solid var(--glass-line);
+}
+.handover-card img {
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+.handover-card small {
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+.handover-card h2 {
+  font-family: var(--display);
+  font-size: 40px;
+  line-height: 1.1;
+}
+.handover-card p {
+  margin: 0 0 14px;
+  color: var(--muted);
+}
+.watch-banner {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  text-align: center;
+  color: var(--silver);
+  background: rgb(255 255 255 / 0.05);
+  border: 1px solid var(--glass-line);
+}
+
+/* ---------- Table talk ---------- */
+
+.seat-bubble {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  z-index: 2;
+  padding: 4px 7px;
+  border-radius: 9px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.5);
+}
+
+/* ---------- Online extras ---------- */
+
+.invite-banner {
+  position: fixed;
+  top: calc(10px + var(--safe-top));
+  left: 12px;
+  right: 12px;
+  z-index: 70;
+  max-width: 540px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 14px;
+  border-radius: 16px;
+  background: #1c1d20;
+  border: 1px solid rgb(229 45 51 / 0.45);
+  box-shadow: 0 16px 40px -12px rgb(0 0 0 / 0.8);
+  font-size: 14px;
+}
+.invite-banner > span {
+  flex: 1;
+  min-width: 0;
+}
+.invite-banner .icon-btn {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+}
+.conn-pill {
+  position: fixed;
+  left: 50%;
+  bottom: calc(96px + var(--safe-bottom));
+  z-index: 60;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #2a1214;
+  color: #ffb3b0;
+  border: 1px solid rgb(229 45 51 / 0.5);
+  white-space: nowrap;
+}
+.presence {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.2);
+  vertical-align: 1px;
+}
+.presence.on {
+  background: var(--pos);
+}
+.presence.playing {
+  background: var(--brass);
+}
+.table-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.table-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgb(0 0 0 / 0.2);
+}
+.table-list li > span {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+.table-list small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.board-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: place;
+}
+.board-list li {
+  display: grid;
+  grid-template-columns: 22px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--glass-line);
+  font-size: 14px;
+}
+.board-list li::before {
+  counter-increment: place;
+  content: counter(place);
+  font-family: var(--display);
+  color: var(--brass-hi);
+  font-weight: 700;
+}
+.board-list li.me b {
+  color: var(--brass-hi);
+}
+.board-list small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.lobby-options {
+  display: grid;
+  gap: 10px;
+}
+.friend-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+  align-items: center;
+}

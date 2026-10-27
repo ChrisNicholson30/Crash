@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react';
+import { buzz } from './settings.ts';
+import { sfx } from './sound.ts';
 
 /** Plain black table with a faint red glow. */
 export function Backdrop() {
@@ -27,7 +29,8 @@ export function Celebration({
   const done = useRef(onDone);
   done.current = onDone;
   useEffect(() => {
-    navigator.vibrate?.(mine ? [30, 40, 30, 40, 120] : 40);
+    buzz(mine ? [30, 40, 30, 40, 120] : 40);
+    sfx.fanfare(kind === 'game');
     const t = setTimeout(() => done.current(), kind === 'leg' ? 2600 : 4200);
     return () => clearTimeout(t);
   }, [kind, mine]);

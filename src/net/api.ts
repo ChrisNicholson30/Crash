@@ -12,6 +12,13 @@ export interface Friend extends User {
   last: string | null;
 }
 
+/** A friend asked you to their table (an unread table message from the last hour). */
+export interface TableInvite {
+  id: number;
+  from: string;
+  tableId: string;
+}
+
 export interface DirectMessage {
   id: number;
   fromId: string;
@@ -39,7 +46,7 @@ async function call<T>(path: string, init: RequestInit & { json?: unknown } = {}
 }
 
 export const api = {
-  me: () => call<{ user: User | null; unread?: number }>('/api/me'),
+  me: () => call<{ user: User | null; unread?: number; invites?: TableInvite[] }>('/api/me'),
   register: (username: string, password: string) => call<{ user: User }>('/api/auth/register', { method: 'POST', json: { username, password } }),
   login: (username: string, password: string) => call<{ user: User }>('/api/auth/login', { method: 'POST', json: { username, password } }),
   logout: () => call<{ ok: true }>('/api/auth/logout', { method: 'POST', json: {} }),

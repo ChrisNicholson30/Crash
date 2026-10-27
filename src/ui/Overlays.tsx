@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react';
 import { motion, useDragControls } from 'motion/react';
-import { RULES, type Match } from '../engine/match.ts';
+import { RULES, matchRules, type Match } from '../engine/match.ts';
 import type { ReactNode } from 'react';
 import { Coin, Tokens } from './Token.tsx';
 import { SEAT_COLORS } from './SeatRail.tsx';
+import { buzz } from './settings.ts';
+import { sfx } from './sound.ts';
 
 /** Full-screen "CRASH" takeover. */
-export function CrashTakeover({ m, me, onDone }: { m: Match; me: number; onDone: () => void }) {
+export function CrashTakeover({ m, me, onDone }: { m: Match; me: number | null; onDone: () => void }) {
   const results = m.deal.crashResults;
   const anyWin = results.some((r) => r.success);
   useEffect(() => {
-    navigator.vibrate?.([60, 40, 120, 40, 200]);
+    buzz([60, 40, 120, 40, 200]);
+    if (anyWin) sfx.crashHit();
+    else sfx.crashMiss();
   }, [anyWin]);
 
   return (
@@ -114,7 +118,7 @@ export function DealSummary({
   gameOverAction,
 }: {
   m: Match;
-  me: number;
+  me: number | null;
   onNext: () => void;
   onHome: () => void;
   nextLabel?: string;
@@ -126,13 +130,17 @@ export function DealSummary({
   const d = m.deal;
   const over = m.phase === 'gameOver';
   const big = o.gameWinner ?? o.setWinner ?? o.legWinner;
+  const rules = matchRules(m);
+  const iAmOut = me !== null && m.players[me].out;
 
   const headline = over
-    ? m.players[me].out
+    ? iAmOut
       ? 'You’re out'
-      : m.winner === me
+      : m.winner === null
+        ? 'Game over'
+        : m.winner === me
         ? 'You win the game!'
-        : `${m.players[m.winner!].name} wins the game`
+        : `${m.players[m.winner].name} wins the game`
     : o.setWinner !== null
       ? `${o.setWinner === me ? 'You win' : `${m.players[o.setWinner].name} wins`} the set`
       : o.legWinner !== null
@@ -140,16 +148,22 @@ export function DealSummary({
         : `Deal ${d.number} done`;
 
   const sub = over
-    ? m.players[me].out
+    ? iAmOut
       ? `Your debt hit ${(-RULES.debtLimit).toLocaleString('en-GB')} tokens.`
-      : `${m.sets[m.winner!]} sets to ${Math.max(...m.sets.filter((_, s) => s !== m.winner))}.`
+      : m.winner === null
+        ? 'Nobody is left at the table.'
+        : rules.setsToWin > 1
+          ? `${m.sets[m.winner]} sets to ${Math.max(...m.sets.filter((_, s) => s !== m.winner))}.`
+          : rules.legsPerSet > 1
+            ? `First to ${rules.legsPerSet} legs.`
+            : `First to ${rules.pointsPerLeg} points.`
     : o.legTied
       ? 'Level at the top — the leg carries on.'
       : o.setWinner !== null
-        ? `Set ${m.setNumber - 1} complete. First to ${RULES.setsToWin} sets wins.`
+        ? `Set ${m.setNumber - 1} complete. First to ${rules.setsToWin} sets wins.`
         : o.legWinner !== null
-          ? `First to ${RULES.legsPerSet} legs takes the set.`
-          : `First to ${RULES.pointsPerLeg} points wins the leg.`;
+          ? `First to ${rules.legsPerSet} legs takes the ${rules.setsToWin > 1 ? 'set' : 'game'}.`
+          : `First to ${rules.pointsPerLeg} points wins the leg.`;
 
   const action = over ? (
     (gameOverAction ?? (
@@ -218,8 +232,8 @@ export function DealSummary({
               <th />
               <th>Points</th>
               <th>Tokens</th>
-              <th>Legs</th>
-              <th>Sets</th>
+              {rules.legsPerSet > 1 && <th>Legs</th>}
+              {rules.setsToWin > 1 && <th>Sets</th>}
             </tr>
           </thead>
           <tbody>
@@ -244,18 +258,20 @@ export function DealSummary({
                     {delta > 0 ? '+' : ''}
                     {delta.toLocaleString('en-GB')}
                   </td>
-                  <td>{m.legs[s]}</td>
-                  <td>{m.sets[s]}</td>
+                  {rules.legsPerSet > 1 && <td>{m.legs[s]}</td>}
+                  {rules.setsToWin > 1 && <td>{m.sets[s]}</td>}
                 </motion.tr>
               );
             })}
           </tbody>
         </table>
 
-        <div className="balance">
-          <span>Your balance</span>
-          <Tokens value={m.players[me].tokens} size={18} />
-        </div>
+        {me !== null && (
+          <div className="balance">
+            <span>Your balance</span>
+            <Tokens value={m.players[me].tokens} size={18} />
+          </div>
+        )}
 
         {action}
       </motion.section>
