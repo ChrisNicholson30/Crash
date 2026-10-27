@@ -23,7 +23,7 @@ const wait = (ms) => page.waitForTimeout(ms);
 await page.goto(url);
 await wait(1200);
 await snap('1-home');
-await page.getByRole('button', { name: /4 players/ }).click();
+await page.getByRole('radio', { name: /4 players/ }).click();
 await page.getByRole('button', { name: 'Play the computer' }).click();
 await wait(1200);
 await snap('2-deal');

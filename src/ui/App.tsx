@@ -97,7 +97,9 @@ export function App() {
     };
   }, []);
 
-  useEffect(() => setBadge(unread), [unread]);
+  useEffect(() => {
+    setBadge(unread);
+  }, [unread]);
 
   // Invite links: befriend the sender and open their table, signing in first if needed.
   useEffect(() => {

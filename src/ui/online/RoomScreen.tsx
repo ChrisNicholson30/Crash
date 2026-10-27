@@ -375,7 +375,10 @@ function ChatSheet({ lines, me, onSend, onClose }: { lines: ChatLine[]; me: stri
   const [text, setText] = useState('');
   const dragControls = useDragControls();
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [lines.length]);
+  // Braces matter: newer browsers return a Promise from scrollIntoView, and an effect may only return a cleanup.
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [lines.length]);
   const quick = ['Nice hand!', 'CRASH incoming', 'Gg', 'No way!', 'Unlucky'];
   const submit = (t: string) => {
     if (!t.trim()) return;

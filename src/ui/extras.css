@@ -424,3 +424,6 @@
   background: var(--glass);
   border: 1px solid var(--glass-line);
 }
+.small-mark {
+  font-size: 48px;
+}
