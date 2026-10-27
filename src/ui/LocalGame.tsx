@@ -40,7 +40,7 @@ export function LocalGame({ m, act, onHome }: Props) {
   const actor = shared ? decider(m) : HUMAN;
   // Whose cards are showing. A new deal, or a different person deciding, brings back the hand-over screen.
   const [shown, setShown] = useState<{ seat: number; key: string } | null>(null);
-  const turnKey = `${m.deal.number}:${actor}`;
+  const turnKey = `${m.id}:${m.deal.number}:${actor}`;
   const me = !shared ? HUMAN : actor !== null && shown?.seat === actor && shown.key === turnKey ? actor : null;
 
   const seat = me ?? HUMAN;

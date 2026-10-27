@@ -90,13 +90,18 @@ export class GameRoom extends DurableObject<Env> {
     if (!room.members.some((m) => m.id === userId)) {
       if (room.status === 'lobby' && room.members.length < room.seats) {
         room.members.push({ id: userId, username });
-        await this.env.DB.prepare('INSERT OR IGNORE INTO table_members (table_id, user_id, joined_at) VALUES (?, ?, ?)')
-          .bind(room.id, userId, Date.now())
-          .run();
+        room.watchers = (room.watchers ?? []).filter((w) => w.id !== userId);
       } else {
         const watchers = room.watchers ?? [];
         if (!watchers.some((w) => w.id === userId)) room.watchers = [...watchers, { id: userId, username }];
       }
+    }
+
+    // Seated people are listed under "your tables" (also covers tables opened before that list existed).
+    if (room.members.some((m) => m.id === userId)) {
+      await this.env.DB.prepare('INSERT OR IGNORE INTO table_members (table_id, user_id, joined_at) VALUES (?, ?, ?)')
+        .bind(room.id, userId, Date.now())
+        .run();
     }
 
     const pair = new WebSocketPair();
@@ -170,7 +175,9 @@ export class GameRoom extends DurableObject<Env> {
         if (room.host.id !== userId) throw new Error('Only the host can change the game');
         if (room.status !== 'lobby') throw new Error('The game has started');
         const { length, skill } = msg.options ?? {};
-        if (!(length in LENGTHS) || !(skill in SKILLS)) throw new Error('Unknown game option');
+        if (typeof length !== 'string' || typeof skill !== 'string' || !Object.hasOwn(LENGTHS, length) || !Object.hasOwn(SKILLS, skill)) {
+          throw new Error('Unknown game option');
+        }
         room.options = { length, skill };
         return;
       }
@@ -253,6 +260,7 @@ export class GameRoom extends DurableObject<Env> {
     const key = `${m.id ?? room.id}:${m.deal.number}`;
     if (room.tallied === key) return;
     room.tallied = key;
+    await this.save();
     const over = m.phase === 'gameOver';
     const now = Date.now();
     const rows = m.players.flatMap((p, seat) => {

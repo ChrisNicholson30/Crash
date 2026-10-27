@@ -48,7 +48,7 @@ pnpm icons                   # regenerate PNG icons from public/icon.svg
 - `src/engine/`: pure TypeScript rules (no UI). `match.ts` covers legs, sets, betting, Crash, debt and match options. `partition.ts` and `ai.ts` are the computer player (three skill levels) and the hand odds. `tally.ts` keeps records. `ai-tables.json` is regenerated with `pnpm ai:tables`.
 - `src/ui/`: React screens and animations. `src/ui/online/` covers accounts, the online hub, messages and live tables.
 - `src/net/`: API client and the live-table protocol.
-- `worker/`: Cloudflare Worker (API and auth) and the `GameRoom` Durable Object (live tables, watchers, records). `migrations/` holds the D1 schema; `0002` adds presence, table membership and online records (the deploy command applies it).
+- `worker/`: Cloudflare Worker (API and auth) and the `GameRoom` Durable Object (live tables, watchers, records). `migrations/` holds the D1 schema; `0002` adds presence, table membership and online records (`pnpm cf:deploy` and the Workers Builds deploy command apply it before deploying; apply it to the preview database by hand, see the setup doc).
 
 ## Deploy
 

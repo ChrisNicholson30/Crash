@@ -122,22 +122,27 @@ export function useRoom(tableId: string | null) {
     let heard = Date.now();
     const snapRef = { current: null as RoomSnapshot | null };
 
+    let connecting = false;
     const connect = async () => {
       clearTimeout(timer);
-      if (stop || (ws.current && ws.current.readyState <= WebSocket.OPEN)) return;
-      // First time in: check the code, so a wrong one gets a clear message instead of endless retries.
-      if (attempt === 0 && !snapRef.current) {
+      if (stop || connecting || (ws.current && ws.current.readyState <= WebSocket.OPEN)) return;
+      connecting = true;
+      // First time in, and every few failed tries: check the table, so a wrong code or an
+      // expired login gets a clear message instead of endless retries.
+      if ((attempt === 0 && !snapRef.current) || (attempt > 0 && attempt % 3 === 0)) {
         try {
           await api.tableInfo(tableId);
         } catch (e) {
           const msg = (e as Error).message;
           if (!/offline/.test(msg)) {
+            connecting = false;
             setError(msg);
             return;
           }
         }
-        if (stop) return;
       }
+      connecting = false;
+      if (stop || (ws.current && ws.current.readyState <= WebSocket.OPEN)) return;
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const sock = new WebSocket(`${proto}://${location.host}/api/tables/${tableId}/ws`);
       ws.current = sock;
