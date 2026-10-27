@@ -15,6 +15,36 @@ export const RULES = {
   crashMinBet: 500,
 } as const;
 
+/** How long a match runs. Every length plays legs to the same 10 points. */
+export type MatchLength = 'quick' | 'standard' | 'full';
+/** How well the computer players arrange, bet and call Crash. */
+export type Skill = 'easy' | 'normal' | 'hard';
+
+export interface MatchOptions {
+  length: MatchLength;
+  skill: Skill;
+}
+
+export const DEFAULT_OPTIONS: MatchOptions = { length: 'full', skill: 'normal' };
+
+export const LENGTHS: Record<MatchLength, { legsPerSet: number; setsToWin: number; name: string; blurb: string }> = {
+  quick: { legsPerSet: 1, setsToWin: 1, name: 'Quick', blurb: 'One leg' },
+  standard: { legsPerSet: 3, setsToWin: 1, name: 'Standard', blurb: 'First to 3 legs' },
+  full: { legsPerSet: 3, setsToWin: 3, name: 'Full', blurb: '3 sets of 3 legs' },
+};
+
+export const SKILLS: Record<Skill, { name: string; blurb: string }> = {
+  easy: { name: 'Easy', blurb: 'Loose hands, small bets' },
+  normal: { name: 'Normal', blurb: 'Solid hands, steady bets' },
+  hard: { name: 'Hard', blurb: 'Reads the table, Crashes sharp' },
+};
+
+/** Leg, set and game targets for this match (older matches have no options: full length). */
+export function matchRules(m: Pick<Match, 'options'>): { pointsPerLeg: number; legsPerSet: number; setsToWin: number } {
+  const l = LENGTHS[m.options?.length ?? 'full'] ?? LENGTHS.full;
+  return { pointsPerLeg: RULES.pointsPerLeg, legsPerSet: l.legsPerSet, setsToWin: l.setsToWin };
+}
+
 /** Cards dealt and hands made, by number of players still in. */
 export function tableLayout(activeCount: number): { cards: number; hands: number } {
   return activeCount === 3 ? { cards: 17, hands: 5 } : { cards: 13, hands: 4 };
@@ -39,6 +69,8 @@ export interface Player {
   out: boolean;
   /** Missed a Crash: sits out the rest of the current leg. */
   sittingOut: boolean;
+  /** Computer players only. Missing means normal. */
+  skill?: Skill;
 }
 
 export interface PositionResult {
@@ -117,6 +149,8 @@ export interface Match {
   outcome: DealOutcome | null;
   /** Seat that won the match, or null (e.g. the human went out). */
   winner: number | null;
+  /** Length and computer skill. Missing on matches saved before options existed. */
+  options?: MatchOptions;
 }
 
 export const HUMAN = 0;
@@ -124,10 +158,11 @@ const AI_NAMES = ['Ava', 'Ben', 'Cal'];
 
 // ---------- set-up ----------
 
-export function newMatch(playerCount: 3 | 4, humanName = 'You', rng: Rng = Math.random): Match {
+export function newMatch(playerCount: 3 | 4, humanName = 'You', rng: Rng = Math.random, options: MatchOptions = DEFAULT_OPTIONS): Match {
   return newMatchWith(
     [{ name: humanName, isHuman: true }, ...AI_NAMES.slice(0, playerCount - 1).map((name) => ({ name, isHuman: false }))],
     rng,
+    options,
   );
 }
 
@@ -138,10 +173,20 @@ export function botNames(taken: string[], count: number): string[] {
 }
 
 /** A match for any mix of people and computer players (3 or 4 seats). Tokens start fresh every game. */
-export function newMatchWith(seats: { name: string; isHuman: boolean; id?: string }[], rng: Rng = Math.random): Match {
+export function newMatchWith(
+  seats: { name: string; isHuman: boolean; id?: string }[],
+  rng: Rng = Math.random,
+  options: MatchOptions = DEFAULT_OPTIONS,
+): Match {
   if (seats.length < 3 || seats.length > 4) throw new Error('Crash needs 3 or 4 players');
   const playerCount = seats.length;
-  const players: Player[] = seats.map((p) => ({ ...p, tokens: RULES.startTokens, out: false, sittingOut: false }));
+  const players: Player[] = seats.map((p) => ({
+    ...p,
+    tokens: RULES.startTokens,
+    out: false,
+    sittingOut: false,
+    ...(p.isHuman ? {} : { skill: options.skill }),
+  }));
   const zeros = () => new Array<number>(playerCount).fill(0);
   const dealer = Math.floor(rng() * playerCount);
   const shell: Match = {
@@ -156,6 +201,7 @@ export function newMatchWith(seats: { name: string; isHuman: boolean; id?: strin
     deal: undefined as unknown as DealState,
     outcome: null,
     winner: null,
+    options: { ...options },
   };
   return { ...shell, deal: dealCards(shell, dealer, 1, rng) };
 }
@@ -265,8 +311,9 @@ function beginIfReady(m: Match, rng: Rng): Match {
   const crashFrom = d.crashFrom.slice();
   for (const s of d.active) {
     if (m.players[s].isHuman) continue;
-    arrangements[s] = aiArrange(d.dealt[s], d.handCount);
-    crash[s] = aiCallsCrash(arrangements[s]!, d.active.length, rng);
+    const skill = m.players[s].skill ?? 'normal';
+    arrangements[s] = aiArrange(d.dealt[s], d.handCount, skill, rng);
+    crash[s] = aiCallsCrash(arrangements[s]!, d.active.length, rng, skill);
     if (crash[s]) crashFrom[s] = 0;
   }
   return openBetting({ ...m, deal: { ...d, arrangements, crash, crashFrom } }, rng);
@@ -521,6 +568,7 @@ function finishDeal(m: Match): Match {
   const sets = m.sets.slice();
   let { legNumber, setNumber } = m;
   const outcome: DealOutcome = { legWinner: null, setWinner: null, gameWinner: null, eliminated, legTied: false };
+  const target = matchRules(m);
 
   const standing = players.flatMap((p, s) => (p.out ? [] : [s]));
   // Players sitting out can't win this leg; if only one player is left in it, they take it.
@@ -532,7 +580,7 @@ function finishDeal(m: Match): Match {
   }
   const top = Math.max(-1, ...inLeg.map((s) => points[s]));
   const leaders = inLeg.filter((s) => points[s] === top);
-  const legOver = (top >= RULES.pointsPerLeg || inLeg.length === 1) && standing.length > 1;
+  const legOver = (top >= target.pointsPerLeg || inLeg.length === 1) && standing.length > 1;
   if (legOver) {
     if (leaders.length === 1 || inLeg.length === 1) {
       const w = inLeg.length === 1 ? inLeg[0] : leaders[0];
@@ -541,13 +589,13 @@ function finishDeal(m: Match): Match {
       points = points.map(() => 0);
       legNumber++;
       players.forEach((p) => (p.sittingOut = false));
-      if (legs[w] >= RULES.legsPerSet) {
+      if (legs[w] >= target.legsPerSet) {
         outcome.setWinner = w;
         sets[w]++;
         legs = legs.map(() => 0);
         setNumber++;
         legNumber = 1;
-        if (sets[w] >= RULES.setsToWin) outcome.gameWinner = w;
+        if (sets[w] >= target.setsToWin) outcome.gameWinner = w;
       }
     } else {
       outcome.legTied = true;
