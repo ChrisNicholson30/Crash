@@ -37,6 +37,8 @@ interface Props {
   bubbles?: Record<number, string>;
   /** Shown above the table (e.g. "Watching"). */
   banner?: ReactNode;
+  /** Watching only: no moves, no "next" buttons. */
+  readOnly?: boolean;
 }
 
 /** "Set 1 · Leg 2 · Deal 5", leaving out what this match length doesn't use. */
@@ -50,7 +52,7 @@ export function progressLabel(m: Match): string {
 }
 
 /** The table: seats, the current stage, and the Crash / summary overlays. */
-export function Game({ m, me, actions, nextLabel, deadline, extra, subtitle, gameOverAction, bubbles, banner }: Props) {
+export function Game({ m, me, actions, nextLabel, deadline, extra, subtitle, gameOverAction, bubbles, banner, readOnly }: Props) {
   const [rules, setRules] = useState(false);
   const [menu, setMenu] = useState(false);
   const [crashSeen, setCrashSeen] = useState(0);
@@ -100,7 +102,7 @@ export function Game({ m, me, actions, nextLabel, deadline, extra, subtitle, gam
             {m.phase === 'arrange' ? (
               <ArrangeView m={m} me={me} onLock={actions.lock} deadline={deadline} />
             ) : (
-              <PlayView m={m} me={me} onBet={actions.bet} onCrash={actions.crash} onNext={actions.next} nextLabel={nextLabel} deadline={deadline} />
+              <PlayView m={m} me={me} readOnly={readOnly} onBet={actions.bet} onCrash={actions.crash} onNext={actions.next} nextLabel={nextLabel} deadline={deadline} />
             )}
           </motion.div>
         </AnimatePresence>
@@ -139,6 +141,7 @@ export function Game({ m, me, actions, nextLabel, deadline, extra, subtitle, gam
             nextLabel={nextLabel}
             onHome={actions.home}
             gameOverAction={gameOverAction}
+            readOnly={readOnly}
           />
         )}
       </AnimatePresence>

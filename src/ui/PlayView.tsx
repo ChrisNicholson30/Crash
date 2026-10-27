@@ -27,6 +27,7 @@ interface Props {
   onNext: () => void;
   nextLabel?: string;
   deadline?: number | null;
+  readOnly?: boolean;
 }
 
 const CHIPS = [100, 500, 1000, 5000];
@@ -37,7 +38,7 @@ const SHORT: Record<string, string> = { Prile: 'Prile', Stiff: 'Stiff', Run: 'Ru
  * face up; everyone else's turn over as each hand is played. The live row is
  * the hand currently being played.
  */
-export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline }: Props) {
+export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline, readOnly }: Props) {
   const d = m.deal;
   const pos = d.position;
   const revealing = m.phase !== 'betting';
@@ -201,7 +202,14 @@ export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline }:
         })}
       </div>
 
-      {revealing ? (
+      {readOnly ? (
+        <footer className="dock">
+          <p className="dock-note waiting">
+            {revealing ? 'Watching' : `Waiting for ${turn !== null ? m.players[turn].name : 'the table'}`}
+            {secs !== null ? ` · ${secs}s` : ''}
+          </p>
+        </footer>
+      ) : revealing ? (
         <motion.footer className="dock" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
           <button type="button" className="btn gold wide" onClick={onNext}>
             {nextLabel ?? (last ? 'Finish deal' : `Play hand ${pos + 2}`)}

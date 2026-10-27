@@ -72,6 +72,14 @@ console.log('✓ accounts, friends, invites, messages');
 const table = await alice.call<{ id: string }>('/api/tables', 'POST', { seats: 4 });
 assert(table.status === 201, 'table created');
 const tableId = table.data.id;
+assert((await alice.call('/api/tables/ZZZZZZ')).status === 404, 'unknown table code is a clear 404');
+const info = await alice.call<{ table: { seated: boolean; status: string } }>(`/api/tables/${tableId}`);
+assert(info.data.table.seated && info.data.table.status === 'lobby', 'host is seated at their new table');
+await alice.call(`/api/messages/${bobMe.id}`, 'POST', { body: `Join my Crash table: ${tableId}`, tableId });
+const invited = await bob.call<{ invites: { tableId: string; from: string }[] }>('/api/me');
+assert(invited.data.invites?.[0]?.tableId === tableId && invited.data.invites[0].from === alice.name, 'table invite shows up app-wide');
+const presence = await bob.call<{ friends: { username: string; lastSeen: number | null }[] }>('/api/friends');
+assert(presence.data.friends.find((f) => f.username === alice.name)?.lastSeen, 'friends show when they were last online');
 
 interface Seat {
   c: Client;
@@ -87,6 +95,10 @@ function connect(c: Client): Promise<Seat> {
     ws.onopen = () => resolve(seat);
     ws.onerror = (e) => reject(new Error(`ws error for ${c.name}: ${(e as ErrorEvent).message ?? e}`));
     ws.onmessage = (e) => {
+      if (e.data === 'pong') {
+        seat.errors.push('pong');
+        return;
+      }
       const msg = JSON.parse(String(e.data)) as ServerMsg;
       if (msg.t === 'error') seat.errors.push(msg.message);
       else seat.last = msg;
@@ -99,6 +111,15 @@ const B = await connect(bob);
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 await wait(300);
 assert(A.last?.room.members.length === 2, 'both players seated in the lobby');
+assert(((await bob.call<{ invites: unknown[] }>('/api/me')).data.invites ?? []).length === 0, 'joining the table answers the invite');
+A.ws.send('ping');
+await wait(200);
+assert(A.errors.splice(A.errors.indexOf('pong'), 1)[0] === 'pong', 'heartbeat answered');
+B.ws.send(JSON.stringify({ t: 'options', options: { length: 'quick', skill: 'hard' } }));
+A.ws.send(JSON.stringify({ t: 'options', options: { length: 'quick', skill: 'hard' } }));
+await wait(300);
+assert(B.errors.some((e) => /host/.test(e)), 'only the host changes the game');
+assert(B.last?.room.options.length === 'quick' && B.last.room.options.skill === 'hard', 'host options reach everyone');
 B.ws.send(JSON.stringify({ t: 'start' }));
 await wait(200);
 assert(B.errors.some((e) => /host/.test(e)), 'only the host can start');
@@ -107,6 +128,21 @@ A.ws.send(JSON.stringify({ t: 'start' }));
 await wait(400);
 assert(B.last?.room.chat.at(-1)?.text === 'Good luck!', 'table chat delivered');
 assert(A.last?.match && B.last?.match, 'match started');
+assert(A.last!.match!.options?.length === 'quick' && A.last!.match!.players.filter((p) => !p.isHuman).every((p) => p.skill === 'hard'), 'match uses the host options');
+const mine = await bob.call<{ tables: { id: string; status: string }[] }>('/api/tables');
+assert(mine.data.tables.some((t) => t.id === tableId && t.status === 'playing'), 'the game is in your tables');
+
+// A third person with the code watches instead of sitting down.
+const carol = new Client(`carol_${suffix}`);
+await carol.call('/api/auth/register', 'POST', { username: carol.name, password: 'correct-horse-9' });
+const C = await connect(carol);
+await wait(400);
+assert(C.last?.me === null && C.last.match, 'a latecomer watches');
+assert(A.last?.room.watchers.some((w) => w.username === carol.name), 'players see who is watching');
+assert(C.last!.match!.deal.dealt.every((cards) => cards.length === 0), 'watchers get nobody’s dealt cards');
+C.ws.send(JSON.stringify({ t: 'bet', amount: 500 }));
+await wait(200);
+assert(C.errors.some((e) => /not seated/.test(e)), 'watchers cannot play');
 
 const seatsOf = (s: Seat) => s.last!.me!;
 let checkedPrivacy = false;
@@ -159,9 +195,21 @@ const total = final.players.reduce((s, p) => s + p.tokens, 0);
 assert(total === 4 * RULES.startTokens, `tokens conserved (${total})`);
 assert(seatsOf(A) !== seatsOf(B), 'different seats');
 const unexpected = [...A.errors, ...B.errors].filter((e) => !/host/.test(e));
+for (const s of [C]) {
+  const m = s.last!.match!;
+  m.deal.arrangements.forEach((a, seat) =>
+    a?.hands.slice(m.deal.results.length).forEach((h) => assert(!h || h[0].rank === 0, `watcher can see an unrevealed hand of seat ${seat}`)),
+  );
+}
+const stats = await alice.call<{ stats: { deals: number; points: number; games: number } }>('/api/stats/me');
+assert(stats.data.stats.deals >= 1, `online record counts deals (${JSON.stringify(stats.data.stats)})`);
+if (final.phase === 'gameOver') assert(stats.data.stats.games === 1, 'finished game counted once');
+const board = await alice.call<{ players: { username: string }[] }>('/api/leaderboard');
+assert(board.data.players.some((p) => p.username === bob.name) && board.data.players.some((p) => p.username === alice.name), 'leaderboard lists you and your friends');
 assert(unexpected.length === 0, `no errors during play: ${unexpected.join('; ')}`);
-console.log(`✓ live table ${tableId}: ${final.deal.number - 1} deals, players ${final.players.map((p) => `${p.name}${p.isHuman ? '*' : ''}=${p.tokens}`).join(', ')}`);
+console.log(`✓ live table ${tableId} (quick game): deal ${final.deal.number}, ${final.phase}, players ${final.players.map((p) => `${p.name}${p.isHuman ? '*' : ''}=${p.tokens}`).join(', ')}`);
 A.ws.close(1000);
 B.ws.close(1000);
+C.ws.close(1000);
 console.log('ALL ONLINE CHECKS PASSED');
 process.exit(0);

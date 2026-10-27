@@ -1,4 +1,4 @@
-import type { Arrangement, Match } from '../engine/match.ts';
+import type { Arrangement, Match, MatchOptions } from '../engine/match.ts';
 
 export interface Member {
   id: string;
@@ -26,6 +26,10 @@ export interface RoomInfo {
   /** When the server will act for anyone still deciding (ms since epoch). */
   deadline: number | null;
   chat: ChatLine[];
+  /** Length and computer skill, chosen by the host in the lobby. */
+  options: MatchOptions;
+  /** People watching who aren't seated. */
+  watchers: Member[];
 }
 
 /** Server → client. */
@@ -42,4 +46,5 @@ export type ClientMsg =
   | { t: 'next' }
   | { t: 'chat'; text: string }
   | { t: 'leave' }
-  | { t: 'rematch' };
+  | { t: 'rematch' }
+  | { t: 'options'; options: MatchOptions };

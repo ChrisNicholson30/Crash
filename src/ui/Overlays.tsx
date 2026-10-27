@@ -116,6 +116,7 @@ export function DealSummary({
   onHome,
   nextLabel,
   gameOverAction,
+  readOnly,
 }: {
   m: Match;
   me: number | null;
@@ -123,6 +124,7 @@ export function DealSummary({
   onHome: () => void;
   nextLabel?: string;
   gameOverAction?: ReactNode;
+  readOnly?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const dragControls = useDragControls();
@@ -171,6 +173,8 @@ export function DealSummary({
         New game
       </button>
     ))
+  ) : readOnly ? (
+    <p className="dock-note waiting">Next deal coming up…</p>
   ) : (
     <button type="button" className="btn gold wide" onClick={onNext}>
       {nextLabel ?? 'Deal again'}

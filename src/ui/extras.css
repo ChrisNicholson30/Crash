@@ -407,3 +407,20 @@
   margin-left: auto;
   align-items: center;
 }
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.friend-row > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.friends .watch-btn {
+  flex-shrink: 0;
+  width: auto;
+  padding: 0 14px;
+  min-height: 40px;
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+}

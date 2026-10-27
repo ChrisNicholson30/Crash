@@ -63,7 +63,7 @@ function savePrefs(p: Prefs) {
   }
 }
 
-function Seg<T extends string | number>({
+export function Seg<T extends string | number>({
   id,
   value,
   options,
