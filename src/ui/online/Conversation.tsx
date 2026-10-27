@@ -36,7 +36,10 @@ export function Conversation({ me, friend, onBack, onJoinTable }: Props) {
     };
   }, [friend.id]);
 
-  useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [messages.length]);
+  // Braces matter: newer browsers return a Promise from scrollIntoView, and an effect may only return a cleanup.
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length]);
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();

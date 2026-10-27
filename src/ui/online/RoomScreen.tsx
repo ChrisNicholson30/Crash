@@ -2,8 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useDragControls } from 'motion/react';
 import { api, useRoom, type Friend, type User } from '../../net/api.ts';
 import type { ChatLine } from '../../net/protocol.ts';
-import { Game } from '../Game.tsx';
+import { LENGTHS, SKILLS, currentBettor, type Match, type MatchLength, type Skill } from '../../engine/match.ts';
+import { Game, progressLabel } from '../Game.tsx';
 import { SEAT_COLORS } from '../SeatRail.tsx';
+import { Seg } from '../Home.tsx';
+import { sfx } from '../sound.ts';
+
+/** Is this seat being waited on for a private decision? */
+function myMove(m: Match | null, me: number | null): boolean {
+  if (!m || me === null) return false;
+  if (m.phase === 'arrange') return m.deal.active.includes(me) && !m.deal.submitted[me];
+  return m.phase === 'betting' && currentBettor(m) === me;
+}
 
 interface Props {
   user: User;
@@ -12,13 +22,43 @@ interface Props {
 }
 
 export function RoomScreen({ user, tableId, onLeave }: Props) {
-  const { snap, error, connected, send, clearError } = useRoom(tableId);
+  const { snap, error, connected, link, send, clearError } = useRoom(tableId);
   const [chatOpen, setChatOpen] = useState(false);
   const seenChat = useRef(0);
   const [unread, setUnread] = useState(0);
   const [peek, setPeek] = useState<ChatLine | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const chat = snap?.room.chat ?? [];
+  const yourMove = myMove(snap?.match ?? null, snap?.me ?? null);
+
+  // Tab title nudges you back when it's your move and the app is in the background.
+  useEffect(() => {
+    const base = 'Crash';
+    const update = () => (document.title = yourMove && document.visibilityState === 'hidden' ? 'Your move · Crash' : base);
+    update();
+    document.addEventListener('visibilitychange', update);
+    return () => {
+      document.removeEventListener('visibilitychange', update);
+      document.title = base;
+    };
+  }, [yourMove]);
+
+  // Recent table talk shows on the speaker's seat for a few seconds.
+  const lastAt = chat.at(-1)?.at ?? 0;
+  useEffect(() => {
+    const left = lastAt + 5000 - Date.now();
+    if (left <= 0) return;
+    setNow(Date.now());
+    const t = setTimeout(() => setNow(Date.now()), left + 50);
+    return () => clearTimeout(t);
+  }, [lastAt]);
+  const bubbles: Record<number, string> = {};
+  for (const line of chat) {
+    if (now - line.at > 5000) continue;
+    const seat = snap?.match?.players.findIndex((p) => p.id === line.from) ?? -1;
+    if (seat >= 0) bubbles[seat] = line.text;
+  }
   useEffect(() => {
     const newest = chat.at(-1);
     if (!newest) return;
@@ -31,6 +71,7 @@ export function RoomScreen({ user, tableId, onLeave }: Props) {
     setUnread(fresh.length);
     const last = fresh.at(-1);
     if (last) {
+      sfx.message();
       setPeek(last);
       const t = setTimeout(() => setPeek(null), 3500);
       return () => clearTimeout(t);
@@ -61,6 +102,7 @@ export function RoomScreen({ user, tableId, onLeave }: Props) {
 
   const overlays = (
     <>
+      {link === 'retrying' && <div className="conn-pill" role="status">Reconnecting…</div>}
       <AnimatePresence>
         {peek && !chatOpen && (
           <motion.button
@@ -86,13 +128,38 @@ export function RoomScreen({ user, tableId, onLeave }: Props) {
     </>
   );
 
-  if (room.status === 'lobby' || !match || me === null) {
+  if (room.status === 'lobby' || !match) {
     return (
       <>
-        <Lobby user={user} snap={snap} onStart={() => send({ t: 'start' })} onLeave={() => {
+        <Lobby user={user} snap={snap} onStart={() => send({ t: 'start' })} onOptions={(options) => send({ t: 'options', options })} onLeave={() => {
           if (room.status === 'lobby') send({ t: 'leave' });
           onLeave();
         }} chatButton={chatButton} />
+        {overlays}
+      </>
+    );
+  }
+
+  // Not seated: watch the game, cards hidden until they turn over.
+  if (me === null) {
+    return (
+      <>
+        <Game
+          m={match}
+          me={null}
+          readOnly
+          deadline={room.deadline}
+          extra={chatButton}
+          bubbles={bubbles}
+          subtitle={`Table ${room.id} · ${progressLabel(match)}`}
+          banner={<p className="watch-banner">Watching · {match.players.filter((p) => p.isHuman).map((p) => p.name).join(', ')}</p>}
+          actions={{ lock: () => {}, bet: () => {}, crash: () => {}, next: () => {}, home: onLeave }}
+          gameOverAction={
+            <button type="button" className="btn ghost wide" onClick={onLeave}>
+              Leave table
+            </button>
+          }
+        />
         {overlays}
       </>
     );
@@ -111,7 +178,8 @@ export function RoomScreen({ user, tableId, onLeave }: Props) {
         deadline={room.deadline}
         nextLabel={nextLabel}
         extra={chatButton}
-        subtitle={`Table ${room.id} · Set ${Math.min(match.setNumber, 3)} · Leg ${match.legNumber}`}
+        bubbles={bubbles}
+        subtitle={`Table ${room.id} · ${progressLabel(match)}`}
         actions={{
           lock: (arrangement) => send({ t: 'arrange', arrangement }),
           bet: (amount) => send({ t: 'bet', amount }),
@@ -145,12 +213,14 @@ function Lobby({
   user,
   snap,
   onStart,
+  onOptions,
   onLeave,
   chatButton,
 }: {
   user: User;
   snap: NonNullable<ReturnType<typeof useRoom>['snap']>;
   onStart: () => void;
+  onOptions: (o: { length: MatchLength; skill: Skill }) => void;
   onLeave: () => void;
   chatButton: React.ReactNode;
 }) {
@@ -235,6 +305,34 @@ function Lobby({
         ))}
       </section>
 
+      <section className="glass card-block lobby-options">
+        <h2>Game</h2>
+        {host ? (
+          <>
+            <Seg
+              id="lobby-length"
+              value={room.options.length}
+              onChange={(length) => onOptions({ ...room.options, length })}
+              options={(Object.keys(LENGTHS) as MatchLength[]).map((k) => ({ value: k, label: LENGTHS[k].name, hint: LENGTHS[k].blurb }))}
+            />
+            {room.members.length < room.seats && (
+              <Seg
+                id="lobby-skill"
+                value={room.options.skill}
+                onChange={(skill) => onOptions({ ...room.options, skill })}
+                options={(Object.keys(SKILLS) as Skill[]).map((k) => ({ value: k, label: SKILLS[k].name, hint: 'computer' }))}
+              />
+            )}
+          </>
+        ) : (
+          <p className="muted">
+            {LENGTHS[room.options.length].name} game · {LENGTHS[room.options.length].blurb}
+            {room.members.length < room.seats ? ` · ${SKILLS[room.options.skill].name} computer` : ''}
+          </p>
+        )}
+        {room.watchers.length > 0 && <p className="muted">Watching: {room.watchers.map((w) => w.username).join(', ')}</p>}
+      </section>
+
       <section className="glass card-block">
         <div className="block-head">
           <h2>Invite</h2>
@@ -277,7 +375,10 @@ function ChatSheet({ lines, me, onSend, onClose }: { lines: ChatLine[]; me: stri
   const [text, setText] = useState('');
   const dragControls = useDragControls();
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [lines.length]);
+  // Braces matter: newer browsers return a Promise from scrollIntoView, and an effect may only return a cleanup.
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [lines.length]);
   const quick = ['Nice hand!', 'CRASH incoming', 'Gg', 'No way!', 'Unlucky'];
   const submit = (t: string) => {
     if (!t.trim()) return;

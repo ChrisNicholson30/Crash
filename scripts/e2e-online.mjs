@@ -5,7 +5,7 @@ import { chromium } from 'playwright';
 
 const url = process.argv[2] ?? 'http://localhost:8787/';
 const shots = process.argv[3];
-const browser = await chromium.launch();
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const suffix = Math.random().toString(36).slice(2, 6);
 const errors = [];
 

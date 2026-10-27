@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { makeDeck, mulberry32, sameCard, shuffle, type Card, type Suit } from './cards.ts';
 import { Category, compareHands, displayOrder, evaluate, isPlayable } from './hands.ts';
 import { bestPartition } from './partition.ts';
-import { aiArrange, positionWinChance } from './ai.ts';
+import { aiArrange, crashChance, expectedPoints, positionWinChance } from './ai.ts';
 import { HIDDEN, viewFor } from './view.ts';
 import {
   HUMAN,
@@ -16,6 +16,7 @@ import {
   submitArrangement,
   advance,
   autoPlayDeal,
+  matchRules,
   lockIn,
   maxBet,
   minBet,
@@ -462,5 +463,117 @@ describe('a whole match', () => {
     } else {
       expect(m.players[HUMAN].out).toBe(true);
     }
+  });
+});
+
+describe('match options', () => {
+  it('a quick match ends when the first leg is won', () => {
+    const rng = mulberry32(31);
+    let m = newMatch(4, 'Bot', rng, { length: 'quick', skill: 'normal' });
+    expect(matchRules(m)).toEqual({ pointsPerLeg: 10, legsPerSet: 1, setsToWin: 1 });
+    let deals = 0;
+    while (m.phase !== 'gameOver' && deals < 100) {
+      m = autoPlayDeal(m, rng);
+      if (m.phase === 'dealEnd') m = advance(m, rng);
+      deals++;
+    }
+    expect(m.phase).toBe('gameOver');
+    if (m.winner !== null && !m.players.some((p) => p.out)) expect(m.sets[m.winner]).toBe(1);
+  });
+
+  it('a standard match is one set: first to three legs', () => {
+    const rng = mulberry32(32);
+    let m = newMatch(3, 'Bot', rng, { length: 'standard', skill: 'easy' });
+    let legsSeen = 0;
+    while (m.phase !== 'gameOver' && legsSeen < 50) {
+      m = autoPlayDeal(m, rng);
+      if (m.outcome?.legWinner != null) legsSeen++;
+      if (m.phase === 'dealEnd') m = advance(m, rng);
+    }
+    expect(m.phase).toBe('gameOver');
+    if (m.winner !== null && !m.players.some((p) => p.out)) expect(m.sets[m.winner]).toBe(1);
+  });
+
+  it('matches saved before options existed play full length', () => {
+    const old: Match = JSON.parse(JSON.stringify({ ...newMatch(4), options: undefined }));
+    expect(old.options).toBeUndefined();
+    expect(matchRules(old)).toEqual({ pointsPerLeg: 10, legsPerSet: 3, setsToWin: 3 });
+  });
+
+  it('gives computer players the chosen skill, and never the people', () => {
+    const m = newMatch(4, 'Me', mulberry32(1), { length: 'full', skill: 'hard' });
+    expect(m.players.map((p) => p.skill)).toEqual([undefined, 'hard', 'hard', 'hard']);
+  });
+});
+
+describe('computer skill', () => {
+  const rng = mulberry32(77);
+  const deals = Array.from({ length: 60 }, () => shuffle(makeDeck(), rng));
+
+  it.each(['easy', 'normal', 'hard'] as const)('%s arrangements are always legal', (skill) => {
+    for (const deck of deals) {
+      for (const [cards, hands] of [[13, 4], [17, 5]] as const) {
+        const dealt = deck.slice(0, cards);
+        expect(validateArrangement(dealt, aiArrange(dealt, hands, skill, rng), hands)).toBeNull();
+      }
+    }
+  });
+
+  it('hard expects at least as many points as normal, and easy no more', () => {
+    let easy = 0;
+    let normal = 0;
+    let hard = 0;
+    for (const deck of deals) {
+      const dealt = deck.slice(0, 13);
+      easy += expectedPoints(aiArrange(dealt, 4, 'easy', rng).hands, 3);
+      normal += expectedPoints(aiArrange(dealt, 4, 'normal', rng).hands, 3);
+      hard += expectedPoints(aiArrange(dealt, 4, 'hard', rng).hands, 3);
+    }
+    expect(hard).toBeGreaterThanOrEqual(normal);
+    expect(easy).toBeLessThanOrEqual(normal);
+  });
+});
+
+describe('hand odds', () => {
+  it('a declined hand has no chance, and a Crash with one is impossible', () => {
+    expect(positionWinChance(4, 3, -1)).toBe(0);
+    expect(crashChance([h('AS AH AD'), h('KS KH KD'), h('QS QH QD'), null], 3)).toBe(0);
+  });
+
+  it('top priles make a near-certain Crash; a weak spread does not', () => {
+    const strong = crashChance([h('AS AH AD'), h('KS KH KD'), h('QS QH QD'), h('JS JH JD')], 3);
+    const weak = crashChance([h('9S 7S 2S'), h('8H 5H 3H'), h('7D 4D 2D'), h('6C 4C 2C')], 3);
+    expect(strong).toBeGreaterThan(0.9);
+    expect(weak).toBeLessThan(0.01);
+    expect(crashChance([h('AS AH AD'), h('KS KH KD'), h('QS QH QD'), h('JS JH JD')], 2)).toBeGreaterThan(strong);
+  });
+});
+
+describe('records', () => {
+  it('tallies points, pots, Crash calls and the best hand from finished deals', async () => {
+    const { addDeal, addGame, dealTally, emptyTally } = await import('./tally.ts');
+    const rng = mulberry32(12);
+    let m = newMatch(4, 'Me', rng);
+    let t = emptyTally();
+    let points = 0;
+    while (m.phase !== 'gameOver') {
+      m = autoPlayDeal(m, rng, true);
+      points += m.deal.pointsThisDeal[HUMAN];
+      t = addDeal(t, dealTally(m, HUMAN));
+      if (m.phase === 'dealEnd') m = advance(m, rng);
+    }
+    t = addGame(t, m.winner === HUMAN);
+    expect(t.points).toBe(points);
+    expect(t.games).toBe(1);
+    expect(t.crashes).toBeGreaterThanOrEqual(t.crashesWon);
+    expect(t.best?.length).toBe(3);
+    expect(t.deals).toBeGreaterThan(0);
+  });
+
+  it('counts win streaks', async () => {
+    const { addGame, emptyTally } = await import('./tally.ts');
+    let t = emptyTally();
+    for (const won of [true, true, false, true]) t = addGame(t, won);
+    expect([t.games, t.wins, t.streak, t.bestStreak]).toEqual([4, 3, 1, 2]);
   });
 });

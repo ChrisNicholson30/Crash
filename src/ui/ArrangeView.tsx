@@ -2,10 +2,13 @@ import { useMemo, useState } from 'react';
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 import { cardId, sameCard, sortByRank, sortBySuit, type Card } from '../engine/cards.ts';
 import { CATEGORY_NAME, Category, displayOrder, evaluate } from '../engine/hands.ts';
-import { aiArrange } from '../engine/ai.ts';
+import { aiArrange, crashChance, expectedPoints, positionWinChance } from '../engine/ai.ts';
 import type { Arrangement, Match } from '../engine/match.ts';
 import { useCountdown } from './Game.tsx';
 import { CardSlot, PlayingCard } from './PlayingCard.tsx';
+import { pct } from './PlayView.tsx';
+import { buzz, setSettings, useSettings } from './settings.ts';
+import { sfx } from './sound.ts';
 
 interface Slot {
   id: number;
@@ -40,10 +43,40 @@ function ordered(slots: Slot[]): Slot[] {
   });
 }
 
-export function ArrangeView(props: Props) {
+export function ArrangeView(props: Omit<Props, 'me'> & { me: number | null }) {
   const { m, me } = props;
+  if (me === null || !m.deal.active.includes(me)) return <Watching m={m} deadline={props.deadline} />;
   if (m.deal.submitted[me]) return <LockedIn m={m} me={me} deadline={props.deadline} />;
-  return <Builder {...props} />;
+  return <Builder {...props} me={me} />;
+}
+
+/** Shown to anyone not building hands this deal: who's still deciding. */
+function Watching({ m, deadline }: { m: Match; deadline?: number | null }) {
+  const secs = useCountdown(deadline);
+  const d = m.deal;
+  return (
+    <section className="arrange">
+      <header className="stage-head">
+        <div>
+          <h2>Building hands</h2>
+          <p>
+            Deal {d.number}: {d.handCount} hands each{secs !== null ? ` · ${secs}s` : ''}
+          </p>
+        </div>
+      </header>
+      <ul className="watch-list">
+        {d.active.map((s) => {
+          const done = !m.players[s].isHuman || d.submitted[s];
+          return (
+            <li key={s} className={done ? 'done' : ''}>
+              <b>{m.players[s].name}</b>
+              <span>{done ? 'Locked in' : 'Building…'}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
 }
 
 /** Shown online after locking in, while others are still building. */
@@ -86,7 +119,9 @@ function Builder({ m, me, onLock, deadline }: Props) {
   const fresh = () => Array.from({ length: handCount }, (_, id) => ({ id, cards: [], declined: false }));
   const [slots, setSlots] = useState<Slot[]>(fresh);
   const [activeId, setActiveId] = useState(0);
-  const [bySuit, setBySuit] = useState(true);
+  const { bySuit, odds } = useSettings();
+  const setBySuit = (v: boolean) => setSettings({ bySuit: v });
+  const opponents = m.deal.active.length - 1;
 
   const view = ordered(slots);
   const placed = slots.flatMap((s) => s.cards);
@@ -108,10 +143,12 @@ function Builder({ m, me, onLock, deadline }: Props) {
     setSlots(next);
     const stillOpen = next.find((s) => s.id === target.id)!.cards.length < 3;
     setActiveId(stillOpen ? target.id : (openSlots(next)[0]?.id ?? target.id));
-    navigator.vibrate?.(8);
+    sfx.card();
+    buzz(8);
   };
 
   const unplace = (slotId: number, card: Card) => {
+    sfx.lift();
     setSlots(slots.map((s) => (s.id === slotId ? { ...s, cards: s.cards.filter((c) => !sameCard(c, card)) } : s)));
     setActiveId(slotId);
   };
@@ -123,12 +160,16 @@ function Builder({ m, me, onLock, deadline }: Props) {
   };
 
   const auto = () => {
+    sfx.deal();
     const arr = aiArrange(dealt, handCount);
     setSlots(arr.hands.map((h, id) => ({ id, cards: h ?? [], declined: h === null })));
     setActiveId(0);
   };
 
+  const finalHands = ready ? ordered(slots).map((s) => (s.declined ? null : s.cards)) : null;
+
   const lock = () => {
+    sfx.lock();
     const hands = ordered(slots).map((s) => (s.declined ? null : s.cards));
     onLock({ hands, spares: pool });
   };
@@ -171,6 +212,12 @@ function Builder({ m, me, onLock, deadline }: Props) {
                       {s.declined ? 'Declined' : ev ? CATEGORY_NAME[ev.category] : `${s.cards.length}/3`}
                     </motion.span>
                   </AnimatePresence>
+                  {odds && ev && !bad && (
+                    <span className="slot-odds" title="Chance of beating each opponent's hand in this position">
+                      <i style={{ width: pct(positionWinChance(handCount, i, ev.value)) }} />
+                      <b>{pct(positionWinChance(handCount, i, ev.value))}</b>
+                    </span>
+                  )}
                   {s.cards.length === 0 && (
                     <button
                       type="button"
@@ -211,6 +258,17 @@ function Builder({ m, me, onLock, deadline }: Props) {
           })}
         </div>
 
+        {odds && finalHands && (
+          <p className="odds-line">
+            Expected points <b>{expectedPoints(finalHands, opponents).toFixed(1)}</b>
+            {finalHands.every((h) => h) && (
+              <>
+                {' '}
+                · Crash chance <b>{pct(crashChance(finalHands, opponents))}</b>
+              </>
+            )}
+          </p>
+        )}
         <div className="pool-head">
           <span>
             {invalid.length

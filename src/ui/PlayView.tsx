@@ -1,21 +1,33 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { CATEGORY_NAME, displayOrder, evaluate } from '../engine/hands.ts';
+import { CATEGORY_NAME, displayOrder, evaluate, handValue } from '../engine/hands.ts';
 import { RULES, canCallCrash, currentBettor, maxBet, minBet, type Match } from '../engine/match.ts';
+import { crashChance, expectedPoints, positionWinChance } from '../engine/ai.ts';
 import { PlayingCard } from './PlayingCard.tsx';
 import { Coin } from './Token.tsx';
 import { SEAT_COLORS } from './SeatRail.tsx';
 import { useCountdown } from './Game.tsx';
+import { useSettings } from './settings.ts';
+import { sfx } from './sound.ts';
+
+/** "62%" — never shows 0% or 100% for a chance that isn't certain. */
+export function pct(p: number): string {
+  if (p <= 0) return '0%';
+  if (p >= 1) return '100%';
+  return `${Math.min(99, Math.max(1, Math.round(p * 100)))}%`;
+}
 
 interface Props {
   m: Match;
-  me: number;
+  /** The seat this screen belongs to, or null for a shared or watching view of the table. */
+  me: number | null;
   onBet: (amount: number) => void;
   /** Calls Crash and bets `amount` (at least the Crash minimum) in one go. */
   onCrash: (amount: number) => void;
   onNext: () => void;
   nextLabel?: string;
   deadline?: number | null;
+  readOnly?: boolean;
 }
 
 const CHIPS = [100, 500, 1000, 5000];
@@ -26,13 +38,15 @@ const SHORT: Record<string, string> = { Prile: 'Prile', Stiff: 'Stiff', Run: 'Ru
  * face up; everyone else's turn over as each hand is played. The live row is
  * the hand currently being played.
  */
-export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline }: Props) {
+export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline, readOnly }: Props) {
   const d = m.deal;
   const pos = d.position;
   const revealing = m.phase !== 'betting';
   const result = revealing ? d.results[pos] : null;
   const row = revealing ? result!.bets : d.bets[pos];
-  const playing = d.active.includes(me);
+  const playing = me !== null && d.active.includes(me);
+  const { odds } = useSettings();
+  const opponents = d.active.length - 1;
   const pot = row.reduce<number>((s, b) => s + (b ?? 0), 0);
   const turn = currentBettor(m);
   const last = pos + 1 >= d.handCount;
@@ -50,7 +64,9 @@ export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline }:
           <p>
             {revealing
               ? 'Cards up. Opening bets and Crash calls are locked.'
-              : !playing
+              : me === null
+                ? `${turn !== null ? m.players[turn].name : 'The table'} to choose a stake.`
+                : !playing
                 ? 'You’re sitting out this leg — watching.'
                 : turn === me
                   ? (canCallCrash(m, me) ? 'Opening move: bet, or call Crash.' : 'Choose your opening stake.')
@@ -132,6 +148,7 @@ export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline }:
                 const hand = d.arrangements[seat]?.hands[p] ?? null;
                 const shown = !!hand && hand[0].rank !== 0 && (seat === me || p < d.results.length);
                 const ev = shown ? evaluate(hand!) : null;
+                const chance = odds && seat === me && hand && p >= d.results.length ? positionWinChance(d.handCount, p, handValue(hand)) : null;
                 const top = !!r && best !== null && best >= 0 && r.values[seat] === best;
                 const pts = r?.points[seat] ?? 0;
                 const flipNow = live && revealing && seat !== me;
@@ -151,6 +168,11 @@ export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline }:
                     )}
                     <span className="cell-foot">
                       {ev && <span className="cell-cat">{SHORT[CATEGORY_NAME[ev.category]] ?? ''}</span>}
+                      {chance !== null && (
+                        <span className="cell-odds" title="Chance of beating each opponent's hand here">
+                          {pct(chance)}
+                        </span>
+                      )}
                       {r && (
                         <motion.span
                           className={`cell-pts${pts ? ' won' : ''}`}
@@ -180,19 +202,26 @@ export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline }:
         })}
       </div>
 
-      {revealing ? (
+      {readOnly ? (
+        <footer className="dock">
+          <p className="dock-note waiting">
+            {revealing ? 'Watching' : `Waiting for ${turn !== null ? m.players[turn].name : 'the table'}`}
+            {secs !== null ? ` · ${secs}s` : ''}
+          </p>
+        </footer>
+      ) : revealing ? (
         <motion.footer className="dock" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
           <button type="button" className="btn gold wide" onClick={onNext}>
             {nextLabel ?? (last ? 'Finish deal' : `Play hand ${pos + 2}`)}
           </button>
           {secs !== null && <p className="dock-note">Moving on in {secs}s</p>}
         </motion.footer>
-      ) : turn === me ? (
-        <BetDock key={`${d.number}-${pos}`} m={m} me={me} onBet={onBet} onCrash={onCrash} secs={secs} />
+      ) : me !== null && turn === me ? (
+        <BetDock key={`${d.number}-${pos}`} m={m} me={me} onBet={onBet} onCrash={onCrash} secs={secs} odds={odds} opponents={opponents} />
       ) : (
         <footer className="dock">
           <p className="dock-note waiting">
-            {!playing
+            {me !== null && !playing
               ? 'You missed a Crash — back in when the next leg starts.'
               : `Waiting for ${turn !== null ? m.players[turn].name : 'the table'}${secs !== null ? ` · ${secs}s` : ''}`}
           </p>
@@ -202,12 +231,32 @@ export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline }:
   );
 }
 
-function BetDock({ m, me, onBet, onCrash, secs }: { m: Match; me: number; onBet: (n: number) => void; onCrash: (n: number) => void; secs: number | null }) {
+function BetDock({
+  m,
+  me,
+  onBet,
+  onCrash,
+  secs,
+  odds,
+  opponents,
+}: {
+  m: Match;
+  me: number;
+  onBet: (n: number) => void;
+  onCrash: (n: number) => void;
+  secs: number | null;
+  odds: boolean;
+  opponents: number;
+}) {
   const min = minBet(m, me);
   const max = maxBet(m, me);
   const [amount, setAmount] = useState(min);
   useEffect(() => setAmount((a) => Math.max(a, min)), [min]);
-  const add = (n: number) => setAmount((a) => Math.min(max, a + n));
+  const add = (n: number) => {
+    sfx.chip();
+    setAmount((a) => Math.min(max, a + n));
+  };
+  const hands = m.deal.arrangements[me]?.hands ?? [];
   const tokens = m.players[me].tokens;
   const crashable = canCallCrash(m, me);
   const crashing = m.deal.crash[me];
@@ -215,6 +264,17 @@ function BetDock({ m, me, onBet, onCrash, secs }: { m: Match; me: number; onBet:
 
   return (
     <footer className="dock bet-dock">
+      {odds && (
+        <p className="odds-line">
+          Expected points <b>{expectedPoints(hands, opponents).toFixed(1)}</b>
+          {crashable && (
+            <>
+              {' '}
+              · Crash chance <b>{pct(crashChance(hands, opponents))}</b>
+            </>
+          )}
+        </p>
+      )}
       <div className="bet-row">
         <div className="bet-amount">
           <small>Stake per hand{secs !== null ? ` · ${secs}s` : ''}</small>
@@ -244,7 +304,10 @@ function BetDock({ m, me, onBet, onCrash, secs }: { m: Match; me: number; onBet:
           <motion.button
             type="button"
             className="crash-toggle big-crash"
-            onClick={() => onCrash(crashAmount)}
+            onClick={() => {
+              sfx.chip();
+              onCrash(crashAmount);
+            }}
             whileTap={{ scale: 0.95 }}
             aria-label={`Call Crash and bet ${crashAmount}`}
           >
@@ -252,7 +315,16 @@ function BetDock({ m, me, onBet, onCrash, secs }: { m: Match; me: number; onBet:
             <small>stake {crashAmount} · {Math.floor(crashAmount / 2)} at risk</small>
           </motion.button>
         )}
-        <motion.button type="button" className="btn gold big-bet" onClick={() => onBet(amount)} disabled={amount === 0} whileTap={{ scale: 0.96 }}>
+        <motion.button
+          type="button"
+          className="btn gold big-bet"
+          onClick={() => {
+            sfx.chip();
+            onBet(amount);
+          }}
+          disabled={amount === 0}
+          whileTap={{ scale: 0.96 }}
+        >
           <span>Bet {amount.toLocaleString('en-GB')}</span>
           <small>{crashing ? 'you’re on a Crash' : 'locked for this deal'}</small>
         </motion.button>

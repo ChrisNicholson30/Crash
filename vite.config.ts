@@ -17,6 +17,12 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
+        id: '/',
+        categories: ['games', 'entertainment'],
+        shortcuts: [
+          { name: 'Play friends online', short_name: 'Online', url: '/?go=online' },
+          { name: 'Play the computer', short_name: 'Solo', url: '/?go=solo' },
+        ],
         icons: [
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },

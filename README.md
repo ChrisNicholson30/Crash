@@ -1,6 +1,13 @@
 # Crash
 
-The three-card hand game for 3 or 4 players, as an installable web app (PWA). Play the computer offline, or sign up and play friends live. Online play includes pairing codes, invite links, messages and table chat.
+The three-card hand game for 3 or 4 players, as an installable web app (PWA).
+
+- **Play the computer** offline, at Easy, Normal or Hard.
+- **Pass & play**: 2–4 people share one phone, with a hand-over screen before each private decision.
+- **Play friends online**: pairing codes, invite links, messages, table chat (shown on the speaker's seat), presence, rejoin your open tables, watch friends' games, records and a friends leaderboard.
+- **Game length**: Quick (one leg), Standard (first to 3 legs) or Full (first to 3 sets).
+- **Hand odds**: win chance per hand, expected points and Crash chance while you build and bet.
+- Sound, vibration and odds settings; your record against the computer; screen stays awake at the table.
 
 ## Rules
 
@@ -28,15 +35,20 @@ pnpm test                    # rules engine tests (Vitest)
 pnpm build                   # typecheck + production build to dist/
 pnpm preview                 # serve the build (service worker active)
 node scripts/e2e-smoke.mjs   # browser smoke test against `pnpm preview`
+node scripts/e2e-passplay.mjs  # pass-and-play through the UI
+pnpm cf:dev, then:
+  node --experimental-transform-types scripts/online-smoke.ts   # API + live tables
+  node scripts/e2e-online.mjs http://localhost:8787/            # two browsers play online
+# Browser scripts take CHROMIUM_PATH if Playwright's own browser isn't installed.
 pnpm icons                   # regenerate PNG icons from public/icon.svg
 ```
 
 ## Layout
 
-- `src/engine/`: pure TypeScript rules (no UI). `match.ts` covers legs, sets, betting, Crash and debt. `partition.ts` and `ai.ts` are the computer player. `ai-tables.json` is regenerated with `pnpm ai:tables`.
+- `src/engine/`: pure TypeScript rules (no UI). `match.ts` covers legs, sets, betting, Crash, debt and match options. `partition.ts` and `ai.ts` are the computer player (three skill levels) and the hand odds. `tally.ts` keeps records. `ai-tables.json` is regenerated with `pnpm ai:tables`.
 - `src/ui/`: React screens and animations. `src/ui/online/` covers accounts, the online hub, messages and live tables.
 - `src/net/`: API client and the live-table protocol.
-- `worker/`: Cloudflare Worker (API and auth) and the `GameRoom` Durable Object (live tables). `migrations/` holds the D1 schema.
+- `worker/`: Cloudflare Worker (API and auth) and the `GameRoom` Durable Object (live tables, watchers, records). `migrations/` holds the D1 schema; `0002` adds presence, table membership and online records (`pnpm cf:deploy` and the Workers Builds deploy command apply it before deploying; apply it to the preview database by hand, see the setup doc).
 
 ## Deploy
 

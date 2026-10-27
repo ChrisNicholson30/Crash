@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 const url = process.argv[2] ?? 'http://localhost:4173/';
 const shots = process.argv[3];
-const browser = await chromium.launch();
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true });
 // Solo play does not need the online account API (which preview does not serve).
 await ctx.route('**/api/me', (route) => route.fulfill({ json: { user: null } }));
@@ -23,7 +23,7 @@ const wait = (ms) => page.waitForTimeout(ms);
 await page.goto(url);
 await wait(1200);
 await snap('1-home');
-await page.getByRole('button', { name: /4 players/ }).click();
+await page.getByRole('radio', { name: /4 players/ }).click();
 await page.getByRole('button', { name: 'Play the computer' }).click();
 await wait(1200);
 await snap('2-deal');

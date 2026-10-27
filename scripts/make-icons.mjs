@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 
 const svg = readFileSync(new URL('../public/icon.svg', import.meta.url), 'utf8');
-const browser = await chromium.launch();
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 for (const [size, file, pad] of [
   [192, 'pwa-192.png', 0],
   [512, 'pwa-512.png', 0],

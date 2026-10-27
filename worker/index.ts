@@ -34,6 +34,41 @@ const json = (data: unknown, init: ResponseInit = {}) =>
   });
 
 const USERNAME = /^[A-Za-z0-9_]{3,20}$/;
+/** Tables older than this drop off "your tables" and presence. */
+const TABLE_MAX_AGE = 2 * 86_400_000;
+
+interface StatsRow {
+  games: number;
+  wins: number;
+  deals: number;
+  points: number;
+  legs: number;
+  sets: number;
+  crashes: number;
+  crashes_won: number;
+  pots: number;
+  streak: number;
+  best_streak: number;
+  best_cards: string | null;
+}
+
+/** A player_stats row in the client's record shape. */
+function toTally(r: StatsRow | null) {
+  return {
+    games: r?.games ?? 0,
+    wins: r?.wins ?? 0,
+    deals: r?.deals ?? 0,
+    points: r?.points ?? 0,
+    legs: r?.legs ?? 0,
+    sets: r?.sets ?? 0,
+    crashes: r?.crashes ?? 0,
+    crashesWon: r?.crashes_won ?? 0,
+    pots: r?.pots ?? 0,
+    streak: r?.streak ?? 0,
+    bestStreak: r?.best_streak ?? 0,
+    best: r?.best_cards ? JSON.parse(r.best_cards) : null,
+  };
+}
 
 async function body<T>(req: Request): Promise<T> {
   if (!(req.headers.get('Content-Type') ?? '').includes('application/json')) throw new HttpError(415, 'Send JSON');
@@ -113,10 +148,23 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
   if (path === '/api/me' && method === 'GET') {
     const user = await currentUser(env.DB, req);
     if (!user) return json({ user: null });
-    const unread = await env.DB.prepare('SELECT COUNT(*) AS n FROM messages WHERE to_user = ? AND read_at IS NULL')
-      .bind(user.id)
-      .first<{ n: number }>();
-    return json({ user, unread: unread?.n ?? 0 });
+    const now = Date.now();
+    const [, unread, invites] = await env.DB.batch<{ n: number } & { id: number; from_name: string; tableId: string }>([
+      env.DB.prepare('UPDATE users SET last_seen = ? WHERE id = ?').bind(now, user.id),
+      env.DB.prepare('SELECT COUNT(*) AS n FROM messages WHERE to_user = ? AND read_at IS NULL').bind(user.id),
+      // Table invites from the last hour, for tables that are still open.
+      env.DB.prepare(
+        `SELECT m.id, u.username AS from_name, m.table_id AS tableId
+         FROM messages m JOIN users u ON u.id = m.from_user JOIN game_tables t ON t.id = m.table_id
+         WHERE m.to_user = ? AND m.read_at IS NULL AND m.created_at > ? AND t.status IN ('lobby', 'playing')
+         ORDER BY m.id DESC LIMIT 3`,
+      ).bind(user.id, now - 3_600_000),
+    ]);
+    return json({
+      user,
+      unread: unread.results[0]?.n ?? 0,
+      invites: invites.results.map((i) => ({ id: i.id, from: i.from_name, tableId: i.tableId })),
+    });
   }
 
   // Everything below needs a signed-in player.
@@ -125,7 +173,9 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
   // ---- friends ----
   if (path === '/api/friends' && method === 'GET') {
     const { results } = await env.DB.prepare(
-      `SELECT u.id, u.username,
+      `SELECT u.id, u.username, u.last_seen AS lastSeen,
+         (SELECT t.id FROM table_members tm JOIN game_tables t ON t.id = tm.table_id
+           WHERE tm.user_id = u.id AND t.status = 'playing' AND t.created_at > ?2 ORDER BY t.created_at DESC LIMIT 1) AS playingAt,
          (SELECT COUNT(*) FROM messages m WHERE m.from_user = u.id AND m.to_user = ?1 AND m.read_at IS NULL) AS unread,
          (SELECT body FROM messages m WHERE (m.from_user = u.id AND m.to_user = ?1) OR (m.from_user = ?1 AND m.to_user = u.id) ORDER BY m.id DESC LIMIT 1) AS last,
          (SELECT MAX(id) FROM messages m WHERE (m.from_user = u.id AND m.to_user = ?1) OR (m.from_user = ?1 AND m.to_user = u.id)) AS last_id
@@ -133,9 +183,9 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
        WHERE f.user_id = ?1
        ORDER BY last_id IS NULL, last_id DESC, u.username`,
     )
-      .bind(me.id)
+      .bind(me.id, Date.now() - TABLE_MAX_AGE)
       .all();
-    return json({ friends: results });
+    return json({ friends: results, now: Date.now() });
   }
 
   if (path === '/api/friends' && method === 'POST') {
@@ -218,10 +268,59 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
       body: JSON.stringify({ id, host: me, seats }),
     });
     if (!res.ok) throw new HttpError(500, 'Could not open a table');
-    await env.DB.prepare('INSERT INTO game_tables (id, host, seats, status, created_at) VALUES (?, ?, ?, ?, ?)')
-      .bind(id, me.id, seats, 'lobby', Date.now())
-      .run();
+    const now = Date.now();
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO game_tables (id, host, seats, status, created_at) VALUES (?, ?, ?, ?, ?)').bind(id, me.id, seats, 'lobby', now),
+      env.DB.prepare('INSERT OR IGNORE INTO table_members (table_id, user_id, joined_at) VALUES (?, ?, ?)').bind(id, me.id, now),
+    ]);
     return json({ id }, { status: 201 });
+  }
+
+  // Tables you're seated at that haven't finished.
+  if (path === '/api/tables' && method === 'GET') {
+    const { results } = await env.DB.prepare(
+      `SELECT t.id, t.seats, t.status, t.created_at AS createdAt, h.username AS host,
+         (SELECT COUNT(*) FROM table_members x WHERE x.table_id = t.id) AS people
+       FROM table_members tm JOIN game_tables t ON t.id = tm.table_id JOIN users h ON h.id = t.host
+       WHERE tm.user_id = ? AND t.status IN ('lobby', 'playing') AND t.created_at > ?
+       ORDER BY t.created_at DESC LIMIT 8`,
+    )
+      .bind(me.id, Date.now() - TABLE_MAX_AGE)
+      .all();
+    return json({ tables: results });
+  }
+
+  const info = path.match(/^\/api\/tables\/([A-Z0-9]{6})$/);
+  if (info && method === 'GET') {
+    const row = await env.DB.prepare(
+      `SELECT t.id, t.seats, t.status, h.username AS host,
+         (SELECT COUNT(*) FROM table_members x WHERE x.table_id = t.id) AS people,
+         EXISTS (SELECT 1 FROM table_members x WHERE x.table_id = t.id AND x.user_id = ?2) AS seated
+       FROM game_tables t JOIN users h ON h.id = t.host WHERE t.id = ?1`,
+    )
+      .bind(info[1], me.id)
+      .first<{ id: string; seats: number; status: string; host: string; people: number; seated: number }>();
+    if (!row) throw new HttpError(404, 'No table with that code');
+    return json({ table: { ...row, seated: !!row.seated } });
+  }
+
+  // ---- records ----
+  if (path === '/api/stats/me' && method === 'GET') {
+    const row = await env.DB.prepare('SELECT * FROM player_stats WHERE user_id = ?').bind(me.id).first<StatsRow>();
+    return json({ stats: toTally(row) });
+  }
+
+  if (path === '/api/leaderboard' && method === 'GET') {
+    const { results } = await env.DB.prepare(
+      `SELECT u.id, u.username, COALESCE(s.games, 0) AS games, COALESCE(s.wins, 0) AS wins, COALESCE(s.legs, 0) AS legs,
+         COALESCE(s.crashes, 0) AS crashes, COALESCE(s.crashes_won, 0) AS crashesWon
+       FROM users u LEFT JOIN player_stats s ON s.user_id = u.id
+       WHERE u.id = ?1 OR u.id IN (SELECT friend_id FROM friends WHERE user_id = ?1)
+       ORDER BY wins DESC, legs DESC, games ASC, u.username LIMIT 50`,
+    )
+      .bind(me.id)
+      .all();
+    return json({ players: results });
   }
 
   const ws = path.match(/^\/api\/tables\/([A-Z0-9]{6})\/ws$/);
@@ -229,6 +328,8 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
     if (req.headers.get('Upgrade')?.toLowerCase() !== 'websocket') throw new HttpError(426, 'Expected a WebSocket');
     const exists = await env.DB.prepare('SELECT 1 FROM game_tables WHERE id = ?').bind(ws[1]).first();
     if (!exists) throw new HttpError(404, 'No table with that code');
+    // Opening the table answers any invite to it.
+    await env.DB.prepare('UPDATE messages SET read_at = ? WHERE to_user = ? AND table_id = ? AND read_at IS NULL').bind(Date.now(), me.id, ws[1]).run();
     const headers = new Headers(req.headers);
     headers.set('X-User-Id', me.id);
     headers.set('X-Username', me.username);

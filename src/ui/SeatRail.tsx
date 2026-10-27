@@ -1,5 +1,5 @@
-import { motion } from 'motion/react';
-import { RULES, type Match } from '../engine/match.ts';
+import { AnimatePresence, motion } from 'motion/react';
+import { matchRules, type Match } from '../engine/match.ts';
 import { Tokens } from './Token.tsx';
 
 export const SEAT_COLORS = ['#e5484d', '#c9ccd2', '#6fa8dc', '#b08fd9'];
@@ -14,14 +14,26 @@ function Pips({ n, of, label }: { n: number; of: number; label: string }) {
   );
 }
 
-export function SeatRail({ m, me, highlight }: { m: Match; me: number; highlight?: number[] }) {
+export function SeatRail({
+  m,
+  me,
+  highlight,
+  bubbles,
+}: {
+  m: Match;
+  me: number | null;
+  highlight?: number[];
+  /** Latest table talk per seat, shown as a speech bubble. */
+  bubbles?: Record<number, string>;
+}) {
+  const rules = matchRules(m);
   return (
     <ol className="rail">
       {m.players.map((p, s) => {
         // During a deal, show points as they're won; they're banked into m.points when the deal ends.
         const live = m.phase === 'betting' || m.phase === 'reveal';
         const pts = m.points[s] + (live ? m.deal.pointsThisDeal[s] : 0);
-        const pct = Math.min(100, (pts / RULES.pointsPerLeg) * 100);
+        const pct = Math.min(100, (pts / rules.pointsPerLeg) * 100);
         return (
           <motion.li
             key={s}
@@ -32,7 +44,7 @@ export function SeatRail({ m, me, highlight }: { m: Match; me: number; highlight
             <span className="seat-top">
               <span className="avatar">{p.name.slice(0, 1).toUpperCase()}</span>
               <span className="seat-name">{s === me ? 'You' : p.name}</span>
-              {p.isHuman && s !== me && <span className="human-dot" title="Person" />}
+              {p.isHuman && me !== null && s !== me && <span className="human-dot" title="Person" />}
               {m.deal.dealer === s && <span className="badge dealer" title="Dealer">D</span>}
               {m.deal.crash[s] && m.phase !== 'arrange' && <span className="badge crash">CRASH</span>}
             </span>
@@ -40,18 +52,25 @@ export function SeatRail({ m, me, highlight }: { m: Match; me: number; highlight
               <b key={pts}>
                 {pts}
               </b>
-              <small>/{RULES.pointsPerLeg}</small>
+              <small>/{rules.pointsPerLeg}</small>
             </span>
             <span className="seat-bar">
               <motion.span animate={{ width: `${pct}%` }} transition={{ type: 'spring', stiffness: 120, damping: 20 }} />
             </span>
             <span className="seat-meta">
-              <Pips n={m.legs[s]} of={RULES.legsPerSet} label="Legs" />
-              <Pips n={m.sets[s]} of={RULES.setsToWin} label="Sets" />
+              {rules.legsPerSet > 1 && <Pips n={m.legs[s]} of={rules.legsPerSet} label="Legs" />}
+              {rules.setsToWin > 1 && <Pips n={m.sets[s]} of={rules.setsToWin} label="Sets" />}
             </span>
             <Tokens value={p.tokens} size={12} />
             {p.out && <span className="out-tag">OUT</span>}
             {p.sittingOut && !p.out && <span className="out-tag sit">SITS OUT</span>}
+            <AnimatePresence>
+              {bubbles?.[s] && (
+                <motion.span key={bubbles[s]} className="seat-bubble" role="status" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  {bubbles[s]}
+                </motion.span>
+              )}
+            </AnimatePresence>
           </motion.li>
         );
       })}

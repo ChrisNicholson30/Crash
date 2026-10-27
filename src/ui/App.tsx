@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { HUMAN, advance, lockIn, newMatch, placeBet, placeCrashFor, resumeMatch, type Match } from '../engine/match.ts';
-import { api, type Friend, type User } from '../net/api.ts';
+import { HUMAN, botNames, newMatchWith, resumeMatch, type Match } from '../engine/match.ts';
+import { api, type Friend, type TableInvite, type User } from '../net/api.ts';
 import { Home } from './Home.tsx';
-import { Game } from './Game.tsx';
+import { LocalGame } from './LocalGame.tsx';
 import { RulesSheet } from './RulesSheet.tsx';
+import { InstallSheet, RecordSheet, SettingsSheet } from './Menus.tsx';
+import { recordDeal, resetRecord, useRecord } from './record.ts';
+import { setBadge } from './pwa.ts';
+import { sfx } from './sound.ts';
 import { Account } from './online/Account.tsx';
 import { Hub } from './online/Hub.tsx';
 import { Conversation } from './online/Conversation.tsx';
@@ -55,14 +59,20 @@ export function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [unread, setUnread] = useState(0);
-  const [rules, setRules] = useState(false);
+  const [invites, setInvites] = useState<TableInvite[]>([]);
+  const [dismissed, setDismissed] = useState<number[]>([]);
+  const [sheet, setSheet] = useState<'rules' | 'record' | 'settings' | 'install' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const record = useRecord();
 
   useEffect(() => {
-    if (m) save(m);
+    if (!m) return;
+    save(m);
+    // Only games against the computer go on your record (pass-and-play has several people).
+    if (m.players.filter((p) => p.isHuman).length === 1) recordDeal(m, HUMAN);
   }, [m]);
 
-  // Who's signed in (quietly fails offline), plus unread message count.
+  // Who's signed in (quietly fails offline), unread messages, and open table invites.
   useEffect(() => {
     const check = () =>
       api
@@ -70,12 +80,26 @@ export function App() {
         .then((r) => {
           setUser(r.user);
           setUnread(r.unread ?? 0);
+          setInvites((old) => {
+            const fresh = r.invites ?? [];
+            if (fresh.some((i) => !old.some((o) => o.id === i.id))) sfx.message();
+            return fresh;
+          });
         })
         .catch(() => setUser((u) => u ?? null));
     check();
-    const t = setInterval(check, 20000);
-    return () => clearInterval(t);
+    const t = setInterval(check, 15000);
+    const wake = () => document.visibilityState === 'visible' && check();
+    document.addEventListener('visibilitychange', wake);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', wake);
+    };
   }, []);
+
+  useEffect(() => {
+    setBadge(unread);
+  }, [unread]);
 
   // Invite links: befriend the sender and open their table, signing in first if needed.
   useEffect(() => {
@@ -116,24 +140,37 @@ export function App() {
 
   const goOnline = () => (user ? setScreen({ name: 'hub' }) : setScreen({ name: 'account' }));
 
+  // Home-screen shortcuts: ?go=online opens the online hub, ?go=solo resumes or starts a game.
+  useEffect(() => {
+    if (user === undefined) return;
+    const go = new URLSearchParams(location.search).get('go');
+    if (!go) return;
+    history.replaceState(null, '', location.pathname);
+    if (go === 'online') goOnline();
+    if (go === 'solo') {
+      let name = 'You';
+      try {
+        name = localStorage.getItem('crash:name') || name;
+      } catch {
+        /* storage unavailable */
+      }
+      setM(saved ?? newMatchWith([{ name, isHuman: true }, ...botNames([name], 3).map((n) => ({ name: n, isHuman: false }))]));
+      setScreen({ name: 'solo' });
+    }
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
   let view: React.ReactNode;
   switch (screen.name) {
     case 'solo':
       view = m && (
-        <Game
+        <LocalGame
           m={m}
-          me={HUMAN}
-          actions={{
-            lock: (arr) => act(() => lockIn(m, arr, false)),
-            bet: (n) => act(() => placeBet(m, n)),
-            crash: (amount) => act(() => placeCrashFor(m, HUMAN, amount)),
-            next: () => act(() => advance(m)),
-            home: () => {
-              if (m.phase !== 'gameOver' && !confirm('Leave this game? It will be saved.')) return;
-              setSaved(m.phase === 'gameOver' ? null : m);
-              setM(null);
-              setScreen({ name: 'home' });
-            },
+          act={act}
+          onHome={() => {
+            if (m.phase !== 'gameOver' && !confirm('Leave this game? It will be saved.')) return;
+            setSaved(m.phase === 'gameOver' ? null : m);
+            setM(null);
+            setScreen({ name: 'home' });
           }}
         />
       );
@@ -184,17 +221,24 @@ export function App() {
             setM(saved);
             setScreen({ name: 'solo' });
           }}
-          onStart={(players, name) => {
-            setM(newMatch(players, name));
+          onStart={({ players, names, options }) => {
+            const people = names.map((name) => ({ name, isHuman: true }));
+            const bots = botNames(names, players - names.length).map((name) => ({ name, isHuman: false }));
+            setM(newMatchWith([...people, ...bots], Math.random, options));
             setScreen({ name: 'solo' });
           }}
           onOnline={goOnline}
           user={user ?? null}
           unread={unread}
-          onRules={() => setRules(true)}
+          onRules={() => setSheet('rules')}
+          onRecord={() => setSheet('record')}
+          onSettings={() => setSheet('settings')}
+          onInstallHelp={() => setSheet('install')}
         />
       );
   }
+
+  const invite = invites.find((i) => !dismissed.includes(i.id) && !(screen.name === 'room' && screen.id === i.tableId));
 
   return (
     <MotionConfig reducedMotion="user">
@@ -218,7 +262,42 @@ export function App() {
           </motion.div>
         )}
       </AnimatePresence>
-      <AnimatePresence>{rules && <RulesSheet onClose={() => setRules(false)} />}</AnimatePresence>
+      <AnimatePresence>
+        {invite && screen.name !== 'solo' && (
+          <motion.div className="invite-banner" role="status" initial={{ y: -40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -40, opacity: 0 }}>
+            <span>
+              <b>{invite.from}</b> invited you to table {invite.tableId}
+            </span>
+            <button
+              type="button"
+              className="btn gold small-btn"
+              onClick={() => {
+                setDismissed((d) => [...d, invite.id]);
+                setScreen({ name: 'room', id: invite.tableId });
+              }}
+            >
+              Join
+            </button>
+            <button type="button" className="icon-btn" aria-label="Dismiss invite" onClick={() => setDismissed((d) => [...d, invite.id])}>
+              ×
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {sheet === 'rules' && <RulesSheet onClose={() => setSheet(null)} />}
+        {sheet === 'settings' && <SettingsSheet onClose={() => setSheet(null)} />}
+        {sheet === 'install' && <InstallSheet onClose={() => setSheet(null)} />}
+        {sheet === 'record' && (
+          <RecordSheet
+            title="Your record"
+            note="Games against the computer on this device."
+            tally={record}
+            onReset={resetRecord}
+            onClose={() => setSheet(null)}
+          />
+        )}
+      </AnimatePresence>
     </MotionConfig>
   );
 }

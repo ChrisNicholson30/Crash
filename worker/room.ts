@@ -9,9 +9,15 @@ import {
   placeCrashFor,
   resumeMatch,
   submitArrangement,
+  DEFAULT_OPTIONS,
+  LENGTHS,
+  SKILLS,
   type Match,
+  type MatchOptions,
 } from '../src/engine/match.ts';
 import { viewFor } from '../src/engine/view.ts';
+import { dealTally } from '../src/engine/tally.ts';
+import { handValue } from '../src/engine/hands.ts';
 import type { ChatLine, ClientMsg, Member, RoomInfo, ServerMsg } from '../src/net/protocol.ts';
 import type { Env } from './index.ts';
 
@@ -28,6 +34,12 @@ interface RoomState {
   recorded: boolean;
   /** Identifies what the current deadline is waiting for. */
   waitKey: string | null;
+  /** Missing on tables opened before options existed. */
+  options?: MatchOptions;
+  /** Connected people who aren't seated. */
+  watchers?: Member[];
+  /** Last finished deal counted towards players' records. */
+  tallied?: string;
 }
 
 /** Seconds the server waits before acting for someone. */
@@ -43,6 +55,8 @@ export class GameRoom extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    // Heartbeats are answered without waking the table.
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
     ctx.blockConcurrencyWhile(async () => {
       this.room = (await ctx.storage.get<RoomState>('room')) ?? null;
       if (this.room?.match) {
@@ -72,10 +86,22 @@ export class GameRoom extends DurableObject<Env> {
     const username = req.headers.get('X-Username');
     if (!room || !userId || !username) return new Response('No such table', { status: 404 });
 
+    // Anyone with the code can sit down while there's a seat in the lobby; otherwise they watch.
     if (!room.members.some((m) => m.id === userId)) {
-      if (room.status !== 'lobby') return new Response('That game has already started', { status: 409 });
-      if (room.members.length >= room.seats) return new Response('That table is full', { status: 409 });
-      room.members.push({ id: userId, username });
+      if (room.status === 'lobby' && room.members.length < room.seats) {
+        room.members.push({ id: userId, username });
+        room.watchers = (room.watchers ?? []).filter((w) => w.id !== userId);
+      } else {
+        const watchers = room.watchers ?? [];
+        if (!watchers.some((w) => w.id === userId)) room.watchers = [...watchers, { id: userId, username }];
+      }
+    }
+
+    // Seated people are listed under "your tables" (also covers tables opened before that list existed).
+    if (room.members.some((m) => m.id === userId)) {
+      await this.env.DB.prepare('INSERT OR IGNORE INTO table_members (table_id, user_id, joined_at) VALUES (?, ?, ?)')
+        .bind(room.id, userId, Date.now())
+        .run();
     }
 
     const pair = new WebSocketPair();
@@ -100,6 +126,11 @@ export class GameRoom extends DurableObject<Env> {
 
   async webSocketClose(ws: WebSocket) {
     ws.close();
+    const room = this.room;
+    if (room?.watchers) {
+      const online = this.onlineIds(ws);
+      room.watchers = room.watchers.filter((w) => online.includes(w.id));
+    }
     await this.afterChange();
   }
 
@@ -127,7 +158,7 @@ export class GameRoom extends DurableObject<Env> {
       case 'chat': {
         const text = String(msg.text ?? '').trim().slice(0, 300);
         if (!text) return;
-        const name = room.members.find((m) => m.id === userId)?.username ?? '?';
+        const name = [...room.members, ...(room.watchers ?? [])].find((m) => m.id === userId)?.username ?? '?';
         const last = room.chat.at(-1)?.id ?? 0;
         room.chat = [...room.chat, { id: last + 1, from: userId, name, text, at: Date.now() }].slice(-60);
         return;
@@ -135,9 +166,21 @@ export class GameRoom extends DurableObject<Env> {
       case 'leave':
         if (room.status !== 'lobby') throw new Error('The game is under way');
         room.members = room.members.filter((m) => m.id !== userId);
+        room.watchers = (room.watchers ?? []).filter((m) => m.id !== userId);
         if (room.host.id === userId && room.members[0]) room.host = room.members[0];
+        void this.env.DB.prepare('DELETE FROM table_members WHERE table_id = ? AND user_id = ?').bind(room.id, userId).run();
         for (const ws of this.ctx.getWebSockets(userId)) ws.close(1000, 'Left the table');
         return;
+      case 'options': {
+        if (room.host.id !== userId) throw new Error('Only the host can change the game');
+        if (room.status !== 'lobby') throw new Error('The game has started');
+        const { length, skill } = msg.options ?? {};
+        if (typeof length !== 'string' || typeof skill !== 'string' || !Object.hasOwn(LENGTHS, length) || !Object.hasOwn(SKILLS, skill)) {
+          throw new Error('Unknown game option');
+        }
+        room.options = { length, skill };
+        return;
+      }
       case 'start':
       case 'rematch': {
         if (room.host.id !== userId) throw new Error('Only the host can start');
@@ -148,7 +191,12 @@ export class GameRoom extends DurableObject<Env> {
           people.map((p) => p.username),
           room.seats - people.length,
         ).map((name) => ({ name, isHuman: false }));
-        room.match = newMatchWith([...people.map((p) => ({ name: p.username, isHuman: true, id: p.id })), ...bots]);
+        room.match = newMatchWith(
+          [...people.map((p) => ({ name: p.username, isHuman: true, id: p.id })), ...bots],
+          Math.random,
+          room.options ?? DEFAULT_OPTIONS,
+        );
+        room.tallied = undefined;
         room.status = 'playing';
         room.recorded = false;
         room.ready = [];
@@ -201,13 +249,60 @@ export class GameRoom extends DurableObject<Env> {
 
   // ---------- plumbing ----------
 
-  private onlineIds(): string[] {
-    return [...new Set(this.ctx.getWebSockets().flatMap((ws) => this.ctx.getTags(ws)))];
+  /** People with an open connection (leaving out a socket that is closing). */
+  private onlineIds(closing?: WebSocket): string[] {
+    return [...new Set(this.ctx.getWebSockets().flatMap((ws) => (ws === closing ? [] : this.ctx.getTags(ws))))];
+  }
+
+  /** Adds each finished deal (and game) to the seated people's online records, once. */
+  private async tally(room: RoomState, m: Match) {
+    if (m.phase !== 'dealEnd' && m.phase !== 'gameOver') return;
+    const key = `${m.id ?? room.id}:${m.deal.number}`;
+    if (room.tallied === key) return;
+    room.tallied = key;
+    await this.save();
+    const over = m.phase === 'gameOver';
+    const now = Date.now();
+    const rows = m.players.flatMap((p, seat) => {
+      if (!p.isHuman || !p.id) return [];
+      const t = dealTally(m, seat);
+      const won = over && m.winner === seat ? 1 : 0;
+      return [
+        this.env.DB.prepare(
+          `INSERT INTO player_stats (user_id, games, wins, deals, points, legs, sets, crashes, crashes_won, pots, streak, best_streak, best_value, best_cards, updated_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?3, ?3, ?11, ?12, ?13)
+           ON CONFLICT (user_id) DO UPDATE SET
+             games = games + ?2, wins = wins + ?3, deals = deals + ?4, points = points + ?5, legs = legs + ?6, sets = sets + ?7,
+             crashes = crashes + ?8, crashes_won = crashes_won + ?9, pots = pots + ?10,
+             streak = CASE WHEN ?2 = 0 THEN streak WHEN ?3 > 0 THEN streak + 1 ELSE 0 END,
+             best_streak = MAX(best_streak, CASE WHEN ?2 = 0 THEN streak WHEN ?3 > 0 THEN streak + 1 ELSE 0 END),
+             best_cards = CASE WHEN ?11 > best_value THEN ?12 ELSE best_cards END,
+             best_value = MAX(best_value, ?11),
+             updated_at = ?13`,
+        ).bind(
+          p.id,
+          over ? 1 : 0,
+          won,
+          t.deals ?? 0,
+          t.points ?? 0,
+          t.legs ?? 0,
+          t.sets ?? 0,
+          t.crashes ?? 0,
+          t.crashesWon ?? 0,
+          t.pots ?? 0,
+          handValue(t.best ?? null),
+          t.best ? JSON.stringify(t.best) : null,
+          now,
+        ),
+      ];
+    });
+    if (rows.length) await this.env.DB.batch(rows).catch((e) => console.error('tally failed', e));
   }
 
   private async afterChange() {
     const room = this.room!;
     const m = room.match;
+    if (m) await this.tally(room, m);
     if (m?.phase === 'gameOver' && !room.recorded) {
       room.status = 'done';
       room.recorded = true;
@@ -285,6 +380,8 @@ export class GameRoom extends DurableObject<Env> {
       ready: room.ready,
       deadline: room.deadline,
       chat: room.chat,
+      options: room.options ?? DEFAULT_OPTIONS,
+      watchers: room.watchers ?? [],
     };
     for (const ws of this.ctx.getWebSockets()) {
       const seat = this.seatOf(this.ctx.getTags(ws)[0]);
