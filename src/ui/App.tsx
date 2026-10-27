@@ -140,6 +140,25 @@ export function App() {
 
   const goOnline = () => (user ? setScreen({ name: 'hub' }) : setScreen({ name: 'account' }));
 
+  // Home-screen shortcuts: ?go=online opens the online hub, ?go=solo resumes or starts a game.
+  useEffect(() => {
+    if (user === undefined) return;
+    const go = new URLSearchParams(location.search).get('go');
+    if (!go) return;
+    history.replaceState(null, '', location.pathname);
+    if (go === 'online') goOnline();
+    if (go === 'solo') {
+      let name = 'You';
+      try {
+        name = localStorage.getItem('crash:name') || name;
+      } catch {
+        /* storage unavailable */
+      }
+      setM(saved ?? newMatchWith([{ name, isHuman: true }, ...botNames([name], 3).map((n) => ({ name: n, isHuman: false }))]));
+      setScreen({ name: 'solo' });
+    }
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
   let view: React.ReactNode;
   switch (screen.name) {
     case 'solo':

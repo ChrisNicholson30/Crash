@@ -1,6 +1,7 @@
 # Crash — "Next level" plan
 
 Date: 2026-10-27
+Status: built on `claude/next-level` (all items NL-01 to NL-15).
 Starting point: `main` at 690506a (solo vs computer, online tables with friends, chat, invites).
 
 ## Ground rules kept

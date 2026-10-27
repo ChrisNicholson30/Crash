@@ -87,8 +87,14 @@ export function RulesSheet({ onClose }: { onClose: () => void }) {
 
         <h3>5 · Legs, sets, game</h3>
         <p>
-          First to {RULES.pointsPerLeg} points wins a leg. {RULES.legsPerSet} legs win a set. {RULES.setsToWin} sets win the game —
-          or be the last one standing.
+          First to {RULES.pointsPerLeg} points wins a leg. In a <b>Full</b> game, {RULES.legsPerSet} legs win a set and {RULES.setsToWin} sets
+          win the game. A <b>Standard</b> game is one set (first to 3 legs); a <b>Quick</b> game is a single leg. Or be the last one standing.
+        </p>
+
+        <h3>6 · Hand odds</h3>
+        <p>
+          With odds on (menu, top right), each hand shows its chance of beating an opponent’s hand in the same position, from
+          thousands of simulated deals. You also see your expected points for the deal and the chance a Crash comes off.
         </p>
 
         <button type="button" className="btn gold wide" onClick={onClose}>
