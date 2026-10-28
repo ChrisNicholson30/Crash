@@ -29,15 +29,12 @@ export function CrashTakeover({ m, me, onDone }: { m: Match; me: number | null; 
       onClick={onDone}
     >
       <motion.div className="takeover-flash" initial={{ opacity: 0.9 }} animate={{ opacity: 0 }} transition={{ duration: 0.8 }} />
-      {[0, 1, 2].map((i) => (
-        <motion.span
-          key={i}
-          className="shockwave"
-          initial={{ scale: 0.1, opacity: 0.9 }}
-          animate={{ scale: 3.2, opacity: 0 }}
-          transition={{ duration: 1.3, delay: 0.25 + i * 0.22, ease: [0.1, 0.7, 0.3, 1] }}
-        />
-      ))}
+      <motion.span
+        className="shockwave"
+        initial={{ scale: 0.1, opacity: 0.8 }}
+        animate={{ scale: 3.2, opacity: 0 }}
+        transition={{ duration: 1.2, delay: 0.25, ease: [0.1, 0.7, 0.3, 1] }}
+      />
       <svg className="cracks" viewBox="0 0 400 800" preserveAspectRatio="none" aria-hidden="true">
         {[
           'M200 400 L150 330 L165 280 L110 200 L125 150 L60 60',
@@ -50,18 +47,6 @@ export function CrashTakeover({ m, me, onDone }: { m: Match; me: number | null; 
           <motion.path key={i} d={d} initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: [0, 1, 0.55] }} transition={{ duration: 0.45, delay: 0.18 + i * 0.03, ease: 'easeOut' }} />
         ))}
       </svg>
-      {Array.from({ length: 18 }, (_, i) => {
-        const a = (i / 18) * Math.PI * 2;
-        return (
-          <motion.span
-            key={`e${i}`}
-            className="ember"
-            initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
-            animate={{ x: Math.cos(a) * (140 + (i % 4) * 50), y: Math.sin(a) * (140 + (i % 3) * 60), opacity: 0, scale: 0.2 }}
-            transition={{ duration: 1.1, delay: 0.3, ease: 'easeOut' }}
-          />
-        );
-      })}
       <motion.div
         className="crash-word"
         initial={{ scale: 3.2, opacity: 0, rotate: -6 }}

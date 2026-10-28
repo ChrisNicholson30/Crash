@@ -4,7 +4,7 @@ import { CATEGORY_NAME, displayOrder, evaluate, handValue } from '../engine/hand
 import { RULES, canCallCrash, currentBettor, maxBet, minBet, type Match } from '../engine/match.ts';
 import { crashChance, expectedPoints, positionWinChance } from '../engine/ai.ts';
 import { PlayingCard } from './PlayingCard.tsx';
-import { Coin } from './Token.tsx';
+import { ChipStack, Coin, Count } from './Token.tsx';
 import { SEAT_COLORS } from './SeatRail.tsx';
 import { useCountdown } from './Game.tsx';
 import { useSettings } from './settings.ts';
@@ -74,132 +74,135 @@ export function PlayView({ m, me, onBet, onCrash, onNext, nextLabel, deadline, r
           </p>
         </div>
         <div className="pot" aria-live="polite">
-          <div className="pot-stack">
-            <Coin size={26} />
-          </div>
+          <ChipStack amount={pot} size={30} />
           <div>
             <small>Pot</small>
-            <b className="pot-num">{pot.toLocaleString('en-GB')}</b>
+            <b className="pot-num">
+              <Count value={pot} />
+            </b>
           </div>
         </div>
       </header>
 
-
-      <div className="board" style={{ ['--cols' as string]: cols.length }}>
-        <div className="board-row board-head">
-          <span />
-          {cols.map((seat) => {
-            const bet = row[seat];
-            return (
-              <div
-                key={seat}
-                className={`board-player${seat === me ? ' me' : ''}${turn === seat ? ' turn' : ''}${d.crash[seat] ? ' crashing' : ''}`}
-                style={{ ['--seat' as string]: SEAT_COLORS[seat] }}
-              >
-                <b>{seat === me ? 'You' : m.players[seat].name}</b>
-                <AnimatePresence mode="wait">
-                  {d.crash[seat] ? (
-                    <motion.em key="crash" className="tile-crash" initial={{ scale: 2, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
-                      CRASH
-                    </motion.em>
-                  ) : null}
-                </AnimatePresence>
-                <span className="board-bet">
-                  {bet !== null && bet !== undefined ? (
-                    <motion.span
-                      key={`${pos}-${bet}`}
-                      className={`bet-chip${bet === 0 ? ' check' : ''}`}
-                      initial={{ opacity: 0, scale: 0.4, y: -10 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-                    >
-                      {bet === 0 ? '—' : (
-                        <>
-                          <Coin size={11} />
-                          {bet}
-                        </>
-                      )}
-                    </motion.span>
-                  ) : turn === seat ? (
-                    <span className="thinking">
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                  ) : null}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-
-        {Array.from({ length: d.handCount }, (_, p) => {
-          const r = d.results[p];
-          const live = p === pos;
-          const best = r ? Math.max(...d.active.map((s) => r.values[s]!)) : null;
-          return (
-            <motion.div
-              key={p}
-              className={`board-row${live ? ' live' : ''}${r && !live ? ' done' : ''}${p > pos ? ' later' : ''}`}
-              layout
-            >
-              <span className="board-num">{p + 1}</span>
+      <div className="felt-table">
+        <div className="felt-surface">
+          <div className="board" style={{ ['--cols' as string]: cols.length }}>
+            <div className="board-row board-head">
+              <span />
               {cols.map((seat) => {
-                const hand = d.arrangements[seat]?.hands[p] ?? null;
-                const shown = !!hand && hand[0].rank !== 0 && (seat === me || p < d.results.length);
-                const ev = shown ? evaluate(hand!) : null;
-                const chance = odds && seat === me && hand && p >= d.results.length ? positionWinChance(d.handCount, p, handValue(hand)) : null;
-                const top = !!r && best !== null && best >= 0 && r.values[seat] === best;
-                const pts = r?.points[seat] ?? 0;
-                const flipNow = live && revealing && seat !== me;
+                const bet = row[seat];
                 return (
                   <div
                     key={seat}
-                    className={`cell${top ? ' top' : ''}${seat === me ? ' me' : ''}`}
+                    className={`board-player${seat === me ? ' me' : ''}${turn === seat ? ' turn' : ''}${d.crash[seat] ? ' crashing' : ''}`}
+                    style={{ ['--seat' as string]: SEAT_COLORS[seat] }}
                   >
-                    {hand ? (
-                      <span className="cell-cards">
-                        {(shown ? displayOrder(hand) : hand).map((c, i) => (
-                          <PlayingCard key={`${p}-${i}`} card={c} size="xs" faceDown={!shown} flipDelay={flipNow ? 0.25 + i * 0.04 : 0} dealDelay={p * 0.05 + i * 0.03} />
-                        ))}
-                      </span>
-                    ) : (
-                      <span className="cell-declined">declined</span>
-                    )}
-                    <span className="cell-foot">
-                      {ev && <span className="cell-cat">{SHORT[CATEGORY_NAME[ev.category]] ?? ''}</span>}
-                      {chance !== null && (
-                        <span className="cell-odds" title="Chance of beating each opponent's hand here">
-                          {pct(chance)}
-                        </span>
-                      )}
-                      {r && (
+                    <b>{seat === me ? 'You' : m.players[seat].name}</b>
+                    <AnimatePresence mode="wait">
+                      {d.crash[seat] ? (
+                        <motion.em key="crash" className="tile-crash" initial={{ scale: 2, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
+                          CRASH
+                        </motion.em>
+                      ) : null}
+                    </AnimatePresence>
+                    <span className="board-bet">
+                      {bet !== null && bet !== undefined ? (
                         <motion.span
-                          className={`cell-pts${pts ? ' won' : ''}`}
-                          initial={live ? { opacity: 0, y: 6 } : false}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: live ? 0.75 : 0 }}
+                          key={`${pos}-${bet}`}
+                          className={`bet-chip${bet === 0 ? ' check' : ''}`}
+                          initial={{ opacity: 0, scale: 0.4, y: -10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          transition={{ type: 'spring', stiffness: 500, damping: 22 }}
                         >
-                          +{pts}
+                          {bet === 0 ? '—' : (
+                            <>
+                              <Coin size={11} />
+                              {bet}
+                            </>
+                          )}
                         </motion.span>
-                      )}
+                      ) : turn === seat ? (
+                        <span className="thinking">
+                          <i />
+                          <i />
+                          <i />
+                        </span>
+                      ) : null}
                     </span>
-                    {live && result && result.potWinners.includes(seat) && result.pot > 0 && (
-                      <motion.span
-                        className="pot-win"
-                        initial={{ opacity: 0, y: 14, scale: 0.6 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        transition={{ delay: 1.1, type: 'spring', stiffness: 300, damping: 18 }}
-                      >
-                        <Coin size={12} /> +{result.tokenDelta[seat] + result.bets[seat]}
-                      </motion.span>
-                    )}
                   </div>
                 );
               })}
-            </motion.div>
-          );
-        })}
+            </div>
+
+            {Array.from({ length: d.handCount }, (_, p) => {
+              const r = d.results[p];
+              const live = p === pos;
+              const best = r ? Math.max(...d.active.map((s) => r.values[s]!)) : null;
+              return (
+                <motion.div
+                  key={p}
+                  className={`board-row${live ? ' live' : ''}${r && !live ? ' done' : ''}${p > pos ? ' later' : ''}`}
+                  layout
+                >
+                  <span className="board-num">{p + 1}</span>
+                  {cols.map((seat) => {
+                    const hand = d.arrangements[seat]?.hands[p] ?? null;
+                    const shown = !!hand && hand[0].rank !== 0 && (seat === me || p < d.results.length);
+                    const ev = shown ? evaluate(hand!) : null;
+                    const chance = odds && seat === me && hand && p >= d.results.length ? positionWinChance(d.handCount, p, handValue(hand)) : null;
+                    const top = !!r && best !== null && best >= 0 && r.values[seat] === best;
+                    const pts = r?.points[seat] ?? 0;
+                    const flipNow = live && revealing && seat !== me;
+                    return (
+                      <div
+                        key={seat}
+                        className={`cell${top ? ' top' : ''}${seat === me ? ' me' : ''}`}
+                      >
+                        {hand ? (
+                          <span className="cell-cards">
+                            {(shown ? displayOrder(hand) : hand).map((c, i) => (
+                              <PlayingCard key={`${p}-${i}`} card={c} size="xs" faceDown={!shown} flipDelay={flipNow ? 0.25 + i * 0.04 : 0} dealDelay={p * 0.05 + i * 0.03} />
+                            ))}
+                          </span>
+                        ) : (
+                          <span className="cell-declined">declined</span>
+                        )}
+                        <span className="cell-foot">
+                          {ev && <span className="cell-cat">{SHORT[CATEGORY_NAME[ev.category]] ?? ''}</span>}
+                          {chance !== null && (
+                            <span className="cell-odds" title="Chance of beating each opponent's hand here">
+                              {pct(chance)}
+                            </span>
+                          )}
+                          {r && (
+                            <motion.span
+                              className={`cell-pts${pts ? ' won' : ''}`}
+                              initial={live ? { opacity: 0, y: 6 } : false}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: live ? 0.75 : 0 }}
+                            >
+                              +{pts}
+                            </motion.span>
+                          )}
+                        </span>
+                        {live && result && result.potWinners.includes(seat) && result.pot > 0 && (
+                          <motion.span
+                            className="pot-win"
+                            initial={{ opacity: 0, y: 14, scale: 0.6 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            transition={{ delay: 1.1, type: 'spring', stiffness: 300, damping: 18 }}
+                          >
+                            <Coin size={12} /> +{result.tokenDelta[seat] + result.bets[seat]}
+                          </motion.span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {readOnly ? (

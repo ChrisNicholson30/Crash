@@ -7,10 +7,12 @@ export interface Settings {
   odds: boolean;
   /** Card pool sorted by suit (else by rank). */
   bySuit: boolean;
+  /** Cards deal, flip and slide; off makes every move instant. */
+  motion: boolean;
 }
 
 const KEY = 'crash:settings';
-const DEFAULTS: Settings = { sound: true, haptics: true, odds: true, bySuit: true };
+const DEFAULTS: Settings = { sound: true, haptics: true, odds: true, bySuit: true, motion: true };
 
 function read(): Settings {
   try {
@@ -35,6 +37,12 @@ export function setSettings(patch: Partial<Settings>) {
     /* storage unavailable: settings last for this visit */
   }
   listeners.forEach((l) => l());
+}
+
+/** Runs now and whenever settings change. */
+export function onSettings(fn: (s: Settings) => void) {
+  fn(current);
+  listeners.add(() => fn(current));
 }
 
 export function useSettings(): Settings {

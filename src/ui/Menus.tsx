@@ -22,6 +22,7 @@ function SettingToggles() {
       />
       <Toggle label="Vibration" hint="Your turn, Crash calls, wins" on={s.haptics} onChange={(haptics) => setSettings({ haptics })} />
       <Toggle label="Hand odds" hint="Win chances while you build and bet" on={s.odds} onChange={(odds) => setSettings({ odds })} />
+      <Toggle label="Motion" hint="Cards deal and flip, chips slide" on={s.motion} onChange={(motion) => setSettings({ motion })} />
     </div>
   );
 }

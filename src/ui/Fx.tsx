@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { motion } from 'motion/react';
 import { buzz } from './settings.ts';
 import { sfx } from './sound.ts';
 
@@ -37,10 +38,30 @@ export function Celebration({
 
   const title = kind === 'game' ? (mine ? 'CHAMPION' : 'GAME OVER') : kind === 'set' ? 'SET WON' : 'LEG WON';
   return (
-    <div className={`celebrate-screen ${kind}${mine ? ' mine' : ''}`} onClick={onDone}>
-      <h2 className="celebrate-title">{title}</h2>
-      <p className="celebrate-name">{mine ? 'You did it!' : `${name} takes it`}</p>
-      <small>{detail}</small>
-    </div>
+    <motion.div
+      className={`celebrate-screen ${kind}${mine ? ' mine' : ''}`}
+      onClick={onDone}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.25 }}
+    >
+      <motion.span className="celebrate-spot" initial={{ scaleY: 0.2, opacity: 0 }} animate={{ scaleY: 1, opacity: 1 }} transition={{ duration: 0.6, ease: 'easeOut' }} />
+      <motion.h2
+        className="celebrate-title"
+        initial={{ scale: 1.5, opacity: 0, filter: 'blur(8px)' }}
+        animate={{ scale: 1, opacity: 1, filter: 'blur(0px)' }}
+        transition={{ duration: 0.55, ease: [0.2, 0.9, 0.3, 1] }}
+      >
+        {title}
+        <motion.span className="sheen" initial={{ x: '-120%' }} animate={{ x: '120%' }} transition={{ duration: 0.9, delay: 0.45, ease: 'easeInOut' }} />
+      </motion.h2>
+      <motion.p className="celebrate-name" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+        {mine ? 'You did it!' : `${name} takes it`}
+      </motion.p>
+      <motion.small initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.55 }}>
+        {detail}
+      </motion.small>
+    </motion.div>
   );
 }
