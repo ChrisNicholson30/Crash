@@ -108,9 +108,31 @@ export function Home({ user, unread, onOnline, canResume, onResume, onStart, onR
 
   return (
     <main className="home">
-      <img className="hero-card" src="/card-back.webp" alt="" width={168} height={252} />
+      <div className="hero" aria-hidden="true">
+        <span className="spot" />
+        {[-1, 1, 0].map((side) => (
+          <motion.img
+            key={side}
+            className={`hero-card${side ? ' side' : ''}`}
+            src="/card-back.webp"
+            alt=""
+            width={168}
+            height={252}
+            initial={{ rotate: 0, x: 0, y: 24, opacity: 0 }}
+            animate={{ rotate: side * 13, x: side * 58, y: side ? 14 : 0, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 140, damping: 18, delay: 0.15 + (side ? 0.12 : 0) }}
+          />
+        ))}
+      </div>
 
-      <h1 className="wordmark">CRASH</h1>
+      <motion.h1
+        className="wordmark"
+        initial={{ opacity: 0, y: 12, letterSpacing: '0.3em' }}
+        animate={{ opacity: 1, y: 0, letterSpacing: '0.12em' }}
+        transition={{ duration: 0.7, ease: [0.2, 0.8, 0.2, 1], delay: 0.1 }}
+      >
+        CRASH
+      </motion.h1>
       <p className="tagline">Thirteen-card brag. Build your hands, back them with tokens, and call the Crash.</p>
 
       <section className="glass setup">

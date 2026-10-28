@@ -194,21 +194,6 @@
   stroke: rgb(196 198 203 / 0.5);
   filter: drop-shadow(0 0 4px rgb(229 45 51 / 0.6));
 }
-.ember {
-  position: absolute;
-  left: 50%;
-  top: 45%;
-  width: 8px;
-  height: 8px;
-  margin: -4px;
-  border-radius: 50%;
-  background: #ffb199;
-  box-shadow: 0 0 12px #ff4d3d;
-}
-.takeover.miss .ember {
-  background: var(--brass-hi);
-  box-shadow: 0 0 10px var(--brass);
-}
 .crash-word,
 .takeover-body {
   position: relative;
